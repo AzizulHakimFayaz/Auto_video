@@ -4,15 +4,11 @@ python-dotenv==1.2.2
 pillow==12.1.0
 pydantic==2.13.4
 
-# Optional OpenAI SDK & Google API client (supported alongside built-in REST transports)
+# OpenAI SDK & Google API client
 openai>=1.50.0,<2.0.0
 google-api-python-client==2.188.0
 google-auth==2.47.0
 google-auth-oauthlib==1.2.4
-
-# Local Text-to-Speech (Piper TTS CLI + ONNX runtime)
-piper-tts==1.2.0
-onnxruntime>=1.18.0
 
 # Automated test suite
 pytest==9.1.1

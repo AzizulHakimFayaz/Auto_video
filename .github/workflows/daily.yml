@@ -53,10 +53,15 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install FFmpeg and system audio dependencies
+      - name: Install FFmpeg, Piper TTS binary, and system audio dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng libsndfile1
+          sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng libsndfile1 curl tar
+          # Install official standalone Piper TTS binary
+          curl -L -s https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz -o /tmp/piper.tar.gz
+          sudo tar -xzf /tmp/piper.tar.gz -C /usr/local/
+          sudo ln -sf /usr/local/piper/piper /usr/local/bin/piper
+          piper --version
 
       - name: Install pinned Python dependencies
         run: |
