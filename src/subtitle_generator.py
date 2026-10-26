@@ -64,13 +64,25 @@ def format_ass_timestamp(seconds: float) -> str:
     return f"{hours:d}:{minutes:02d}:{secs:02d}.{centis:02d}"
 
 
+PAUSE_REGEX = re.compile(r"\[pause(?::\s*[0-9.]+\s*s?)?\]", re.IGNORECASE)
+
+
+def strip_pause_markers(text: str) -> str:
+    """Remove [pause] or [pause: Xs] tags so subtitles only display spoken words."""
+    if not text:
+        return ""
+    stripped = PAUSE_REGEX.sub("", text)
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
 def split_text_into_mobile_phrases(
     text: str,
     max_chars_per_cue: int = 56,
     max_words_per_cue: int = 10,
 ) -> List[str]:
     """Split a scene narration into readable mobile phrases while preserving punctuation."""
-    cleaned = " ".join(text.strip().split())
+    cleaned = strip_pause_markers(text)
+    cleaned = " ".join(cleaned.split())
     if not cleaned:
         return []
 
@@ -151,11 +163,12 @@ class SubtitleGenerator:
     def build_cues(
         self,
         audio_segments: List[AudioSegmentResult],
-        inter_scene_pause_seconds: float = 0.25,
+        inter_scene_pauses: Optional[List[float]] = None,
+        inter_scene_pause_seconds: float = 0.55,
         max_video_duration: Optional[float] = None,
         initial_offset_seconds: float = 0.0,
     ) -> List[SubtitleCue]:
-        """Compute subtitle cues strictly anchored to each audio segment's real duration."""
+        """Compute subtitle cues strictly anchored to each audio segment's real duration and pause intervals."""
         if not audio_segments:
             raise SubtitleGenerationError("Cannot build subtitles from empty audio segments.")
 
@@ -164,6 +177,77 @@ class SubtitleGenerator:
         cue_index = 1
 
         for seg_idx, segment in enumerate(audio_segments):
+            # Check if segment has fine-grained spoken chunks (from dramatic pause markers)
+            chunks = getattr(segment, "spoken_chunks", None) or []
+            if chunks:
+                for chunk in chunks:
+                    chunk_dur = max(0.1, float(chunk.duration_seconds))
+                    chunk_start = cursor
+                    chunk_end = chunk_start + chunk_dur
+                    if max_video_duration is not None:
+                        if chunk_start >= max_video_duration:
+                            break
+                        chunk_end = min(chunk_end, max_video_duration)
+
+                    eff_dur = max(0.08, chunk_end - chunk_start)
+                    phrases = split_text_into_mobile_phrases(
+                        chunk.text,
+                        max_chars_per_cue=self.max_chars_per_cue,
+                        max_words_per_cue=self.max_words_per_cue,
+                    )
+                    if not phrases:
+                        phrases = [strip_pause_markers(chunk.text)]
+
+                    weights = []
+                    for p in phrases:
+                        chars = len(re.findall(r"[A-Za-z0-9]", p))
+                        punct = 2.5 if p.endswith((".", "!", "?")) else (1.0 if p.endswith(",") else 0.0)
+                        weights.append(max(1.0, float(chars) + punct))
+
+                    total_w = sum(weights)
+                    p_cursor = chunk_start
+
+                    for p_idx, (p_text, w) in enumerate(zip(phrases, weights)):
+                        if p_idx == len(phrases) - 1:
+                            p_end = chunk_end
+                        else:
+                            share = (w / total_w) * eff_dur
+                            p_end = min(chunk_end, p_cursor + max(0.25, share))
+
+                        s_t = round(max(0.0, p_cursor), 3)
+                        e_t = round(max(s_t + 0.08, p_end), 3)
+                        if max_video_duration is not None:
+                            e_t = round(min(e_t, max_video_duration), 3)
+                            if s_t >= e_t:
+                                break
+
+                        wrapped = wrap_cue_lines(p_text, max_line_chars=self.max_line_chars)
+                        cues.append(
+                            SubtitleCue(
+                                index=cue_index,
+                                scene_index=segment.scene_index,
+                                start_seconds=s_t,
+                                end_seconds=e_t,
+                                text=wrapped,
+                            )
+                        )
+                        cue_index += 1
+                        p_cursor = e_t
+
+                    # Advance past speech duration + pause_after
+                    cursor = chunk_end + max(0.0, float(chunk.pause_after_seconds))
+
+                # Advance past inter-scene pause if not the last segment
+                if seg_idx < len(audio_segments) - 1:
+                    pause_val = (
+                        inter_scene_pauses[seg_idx]
+                        if inter_scene_pauses and seg_idx < len(inter_scene_pauses)
+                        else inter_scene_pause_seconds
+                    )
+                    cursor += max(0.0, float(pause_val))
+                continue
+
+            # Fallback path for segments without fine-grained chunk list
             seg_duration = max(0.2, float(segment.duration_seconds))
             scene_start = cursor
             scene_end = scene_start + seg_duration
@@ -180,10 +264,9 @@ class SubtitleGenerator:
                 max_words_per_cue=self.max_words_per_cue,
             )
             if not phrases:
-                phrases = [segment.narration_text.strip()]
+                phrases = [strip_pause_markers(segment.narration_text)]
 
-            # Weight each phrase within this measured audio segment by spoken character count + punctuation pause weight
-            weights: List[float] = []
+            weights = []
             for p in phrases:
                 spoken_chars = len(re.findall(r"[A-Za-z0-9]", p))
                 punct_bonus = 2.5 if p.endswith((".", "!", "?")) else (1.0 if p.endswith(",") else 0.0)
@@ -199,7 +282,6 @@ class SubtitleGenerator:
                     share = (weight / total_weight) * effective_seg_duration
                     phrase_end = min(scene_end, phrase_cursor + max(0.25, share))
 
-                # Ensure non-overlapping monotonically increasing timestamps
                 start_t = round(max(0.0, phrase_cursor), 3)
                 end_t = round(max(start_t + 0.08, phrase_end), 3)
                 if max_video_duration is not None:
@@ -220,9 +302,12 @@ class SubtitleGenerator:
                 cue_index += 1
                 phrase_cursor = end_t
 
-            cursor = scene_end + (
-                inter_scene_pause_seconds if seg_idx < len(audio_segments) - 1 else 0.0
+            pause_s = (
+                inter_scene_pauses[seg_idx]
+                if inter_scene_pauses and seg_idx < len(inter_scene_pauses)
+                else inter_scene_pause_seconds
             )
+            cursor = scene_end + (pause_s if seg_idx < len(audio_segments) - 1 else 0.0)
 
         if not cues:
             raise SubtitleGenerationError("No valid subtitle cues were generated.")

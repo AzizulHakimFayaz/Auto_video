@@ -135,37 +135,91 @@ THEME_SPECS: Dict[str, List[Tuple[str, Tuple[int, int, int], Tuple[int, int, int
             ["city", "window", "bench", "architecture", "buildings", "road"],
         ),
     ],
+    "betrayal": [
+        (
+            "unlocked_phone_message_midnight.jpg",
+            (10, 14, 28),
+            (45, 52, 90),
+            ["betrayal", "phone", "message", "cheating", "secret", "dark", "midnight", "deceit"],
+        ),
+        (
+            "broken_mirror_shadowed_room.jpg",
+            (14, 16, 24),
+            (60, 55, 75),
+            ["betrayal", "mirror", "reflection", "shadow", "shattered", "lies", "drama"],
+        ),
+    ],
+    "heartbreak": [
+        (
+            "empty_wedding_ring_bedside.jpg",
+            (24, 18, 22),
+            (95, 68, 72),
+            ["heartbreak", "ring", "table", "alone", "departure", "tears", "sadness", "loss"],
+        ),
+        (
+            "solitary_walk_neon_rain.jpg",
+            (18, 22, 38),
+            (85, 70, 120),
+            ["heartbreak", "walking", "rain", "neon", "umbrella", "lonely", "goodbye"],
+        ),
+    ],
+    "revenge": [
+        (
+            "silent_departure_dawn_highway.jpg",
+            (15, 20, 32),
+            (120, 85, 60),
+            ["revenge", "highway", "dawn", "car", "karma", "leaving", "dignity", "strong"],
+        ),
+    ],
 }
 
 MUSIC_SPECS: List[Tuple[str, str, List[float], List[str]]] = [
     (
+        "betrayal_tension_strings.wav",
+        "Shadows of Deceit",
+        [73.42, 146.83, 174.61, 220.0, 277.18],  # D minor low dark cello & suspense strings
+        ["betrayal", "cheating", "deceit", "revenge", "lies", "tension", "dark", "drama", "suspense"],
+    ),
+    (
+        "heartbreak_piano.wav",
+        "Unspoken Tears",
+        [110.0, 220.0, 261.63, 329.63, 392.0],  # A minor melancholic piano & weeping pad
+        ["heartbreak", "broken", "sorrow", "tears", "loss", "sad", "sadness", "pain", "piano"],
+    ),
+    (
+        "revenge_karma.wav",
+        "The Final Departure",
+        [65.41, 130.81, 155.56, 196.0, 246.94],  # C minor driving dramatic karma progression
+        ["revenge", "karma", "climax", "betrayal", "drama", "tension"],
+    ),
+    (
         "sad_piano_ambient.wav",
         "Quiet Rain Reflections",
-        [220.0, 261.63, 329.63, 392.0],  # A minor7 gentle chord
+        [110.0, 220.0, 261.63, 329.63, 392.0],  # A minor7 gentle chord
         ["sad", "sadness", "melancholic", "melancholy", "lonely", "piano"],
     ),
     (
         "hopeful_dawn_chords.wav",
         "First Light of Tomorrow",
-        [261.63, 329.63, 392.0, 493.88],  # C major7 uplifting chord
+        [130.81, 261.63, 329.63, 392.0, 493.88],  # C major7 uplifting chord
         ["hopeful", "hope", "uplifting", "inspiring", "sunrise"],
     ),
     (
         "romantic_warm_pad.wav",
         "Warmth Under the Shelter",
-        [174.61, 220.0, 261.63, 349.23],  # F major warm voicing
+        [87.31, 174.61, 220.0, 261.63, 349.23],  # F major warm voicing
         ["romantic", "love", "warm", "kindness", "family", "heartfelt"],
     ),
     (
         "suspense_atmosphere.wav",
         "Distant Thunder Horizon",
-        [146.83, 174.61, 220.0, 277.18],  # D minor atmospheric tension
+        [73.42, 146.83, 174.61, 220.0, 277.18],  # D minor atmospheric tension
         ["suspenseful", "suspense", "tense", "tragedy", "atmospheric"],
     ),
     (
         "peaceful_breeze_ambient.wav",
         "Still Water Sanctuary",
-        [196.0, 246.94, 293.66, 392.0],  # G major open ambient voicing
+        [98.0, 196.0, 246.94, 293.66, 392.0],  # G major open ambient voicing
         ["peaceful", "peace", "calm", "ambient", "gentle", "nature"],
     ),
 ]
@@ -232,23 +286,25 @@ def _render_atmospheric_image(
 def _synthesize_ambient_track(
     dest_path: Path,
     frequencies: List[float],
-    duration_seconds: float = 16.0,
+    duration_seconds: float = 30.0,
     sample_rate: int = 22050,
 ) -> None:
-    """Synthesize a gentle, loopable harmonic ambient pad WAV file."""
+    """Synthesize a rich, audible, loopable dramatic harmonic soundtrack WAV file."""
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     total_samples = int(round(duration_seconds * sample_rate))
     buf = bytearray(total_samples * 2)
 
     for i in range(total_samples):
         t = i / float(sample_rate)
-        env = min(1.0, t / 1.5, (duration_seconds - t) / 1.5)
-        lfo = 0.82 + 0.18 * math.sin(2.0 * math.pi * 0.25 * t)
+        env = min(1.0, t / 1.2, (duration_seconds - t) / 1.2)
+        lfo = 0.82 + 0.18 * math.sin(2.0 * math.pi * 0.22 * t)
         val = 0.0
         for idx, freq in enumerate(frequencies):
-            detune = 1.0 + (idx - 1.5) * 0.0008
-            val += math.sin(2.0 * math.pi * freq * detune * t) / len(frequencies)
-        sample_int = int(max(-32767, min(32767, val * env * lfo * 6500.0)))
+            detune = 1.0 + (idx - 1.5) * 0.0012
+            fundamental = math.sin(2.0 * math.pi * freq * detune * t)
+            overtone = 0.35 * math.sin(4.0 * math.pi * freq * detune * t)
+            val += (fundamental + overtone) / len(frequencies)
+        sample_int = int(max(-32767, min(32767, val * env * lfo * 22000.0)))
         struct.pack_into("<h", buf, i * 2, sample_int)
 
     with wave.open(str(dest_path), "wb") as wf:

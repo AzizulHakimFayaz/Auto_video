@@ -108,8 +108,8 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           OPENVERSE_ENABLED: ${{ vars.OPENVERSE_ENABLED || 'false' }}
           STORY_LANGUAGE: ${{ vars.STORY_LANGUAGE || 'English' }}
-          STORY_MIN_WORDS: ${{ vars.STORY_MIN_WORDS || '100' }}
-          STORY_MAX_WORDS: ${{ vars.STORY_MAX_WORDS || '130' }}
+          STORY_MIN_WORDS: ${{ vars.STORY_MIN_WORDS || '150' }}
+          STORY_MAX_WORDS: ${{ vars.STORY_MAX_WORDS || '190' }}
           PIPER_EXECUTABLE: "piper"
           PIPER_VOICE: "en_US-ljspeech-medium"
           PIPER_MODEL_PATH: "models/piper/en_US-ljspeech-medium.onnx"
@@ -122,7 +122,7 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          YOUTUBE_PRIVACY_STATUS: ${{ vars.YOUTUBE_PRIVACY_STATUS || 'private' }}
+          YOUTUBE_PRIVACY_STATUS: ${{ vars.YOUTUBE_PRIVACY_STATUS || 'public' }}
           INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           INSTAGRAM_VIDEO_PUBLIC_URL_BASE: ${{ vars.INSTAGRAM_VIDEO_PUBLIC_URL_BASE || '' }}

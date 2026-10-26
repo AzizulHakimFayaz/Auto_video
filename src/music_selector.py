@@ -22,10 +22,59 @@ logger = logging.getLogger(__name__)
 SUPPORTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a"}
 
 STORY_MOOD_CATEGORIES: Dict[str, List[str]] = {
+    "betrayal": [
+        "betrayal",
+        "cheating",
+        "deceit",
+        "revenge",
+        "lies",
+        "secret",
+        "suspense",
+        "tension",
+        "dark",
+        "infidelity",
+        "drama",
+    ],
+    "heartbreak": [
+        "heartbreak",
+        "broken",
+        "sorrow",
+        "tears",
+        "loss",
+        "sad",
+        "sadness",
+        "melancholy",
+        "grief",
+        "pain",
+    ],
+    "suspenseful": [
+        "suspenseful",
+        "suspense",
+        "tense",
+        "tragedy",
+        "atmospheric",
+        "mystery",
+        "shock",
+    ],
     "sad": ["sad", "sadness", "melancholy", "melancholic", "lonely", "grief", "piano"],
-    "hopeful": ["hopeful", "hope", "uplifting", "inspiring", "warm", "redemption"],
-    "romantic": ["romantic", "love", "tender", "warm", "affection", "heartfelt"],
-    "suspenseful": ["suspenseful", "suspense", "tense", "tragedy", "atmospheric", "mystery"],
+    "hopeful": [
+        "hopeful",
+        "hope",
+        "uplifting",
+        "inspiring",
+        "warm",
+        "redemption",
+        "dignity",
+    ],
+    "romantic": [
+        "romantic",
+        "love",
+        "tender",
+        "warm",
+        "affection",
+        "heartfelt",
+        "passion",
+    ],
     "peaceful": ["peaceful", "peace", "calm", "ambient", "gentle", "serene", "nature"],
 }
 
@@ -71,8 +120,9 @@ def classify_story_mood(mood_description: str) -> str:
 class MusicSelector:
     """Selects and validates licensed background music matched to the story mood."""
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: AppConfig, downloader: Optional[Any] = None) -> None:
         self.config = config
+        self.downloader = downloader
 
     def _load_manifest(self) -> Dict[str, Dict[str, Any]]:
         manifest_path = self.config.license_directory / "music_manifest.json"
@@ -146,11 +196,24 @@ class MusicSelector:
             restrictions=str(meta.get("restrictions", "None")).strip(),
         )
 
-    def select_music(self, story_mood: str) -> Optional[MusicTrackMetadata]:
-        """Select the best licensed background track matching `story_mood`.
+    def select_music(
+        self,
+        story_mood: str,
+        music_style: str = "",
+    ) -> Optional[MusicTrackMetadata]:
+        """Select the best licensed background track matching `story_mood` and `music_style`.
 
         Returns None when no licensed track is available and narration-only fallback is enabled.
         """
+        if self.downloader is not None and (music_style or story_mood):
+            try:
+                downloaded = self.downloader.search_and_download(
+                    style_prompt=music_style, mood=story_mood
+                )
+                if downloaded is not None:
+                    logger.info("Auto-downloaded background music track: %s", downloaded.name)
+            except Exception as dl_err:
+                logger.warning("Auto music download attempt encountered non-fatal error: %s", dl_err)
         target_category = classify_story_mood(story_mood)
         raw_mood_tokens = set(re.findall(r"\b[a-z]+\b", story_mood.lower()))
         target_keywords = set(STORY_MOOD_CATEGORIES.get(target_category, [])) | raw_mood_tokens

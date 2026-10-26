@@ -82,7 +82,8 @@ class VideoRenderer:
         story_title: str,
         total_duration_seconds: float,
         music_track: Optional[MusicTrackMetadata] = None,
-        inter_scene_pause_seconds: float = 0.25,
+        inter_scene_pauses: Optional[List[float]] = None,
+        inter_scene_pause_seconds: float = 0.55,
     ) -> List[str]:
         """Construct the complete FFmpeg CLI command for vertical video rendering."""
         if not images or not audio_segments:
@@ -103,7 +104,11 @@ class VideoRenderer:
         # Calculate exact per-scene slot durations so post-xfade length equals total_duration_seconds
         slot_durations: List[float] = []
         for idx, seg in enumerate(audio_segments):
-            pause = inter_scene_pause_seconds if idx < num_scenes - 1 else 0.0
+            pause = (
+                inter_scene_pauses[idx]
+                if inter_scene_pauses and idx < len(inter_scene_pauses)
+                else (inter_scene_pause_seconds if idx < num_scenes - 1 else 0.0)
+            )
             slot_durations.append(max(1.0, float(seg.duration_seconds) + pause))
 
         # Adjust final slot if needed to match total_duration_seconds
@@ -232,7 +237,7 @@ class VideoRenderer:
                     f"volume={m_vol:.3f},"
                     f"afade=t=in:st=0:d={m_fade_in:.2f},"
                     f"afade=t=out:st={m_fade_out_start:.3f}:d={m_fade_out:.2f}[music_pre];"
-                    f"[music_pre][narr_sc]sidechaincompress=threshold=0.03:ratio=5:attack=40:release=400[music_ducked];"
+                    f"[music_pre][narr_sc]sidechaincompress=threshold=0.08:ratio=3:attack=50:release=700[music_ducked];"
                     f"[narr_main][music_ducked]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,"
                     f"alimiter=limit=0.95[aout]"
                 )
@@ -325,7 +330,8 @@ class VideoRenderer:
         story_title: str,
         total_duration_seconds: float,
         music_track: Optional[MusicTrackMetadata] = None,
-        inter_scene_pause_seconds: float = 0.25,
+        inter_scene_pauses: Optional[List[float]] = None,
+        inter_scene_pause_seconds: float = 0.55,
         diagnostics_dir: Optional[Path] = None,
     ) -> RenderResult:
         """Execute the FFmpeg render pipeline using a temporary workspace and clean up on success."""
@@ -346,6 +352,7 @@ class VideoRenderer:
                 story_title=story_title,
                 total_duration_seconds=total_duration_seconds,
                 music_track=music_track,
+                inter_scene_pauses=inter_scene_pauses,
                 inter_scene_pause_seconds=inter_scene_pause_seconds,
             )
 

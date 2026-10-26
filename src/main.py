@@ -30,6 +30,7 @@ from src.metadata_generator import (
     TikTokMetadata,
     YouTubeMetadata,
 )
+from src.music_downloader import MusicDownloader
 from src.music_selector import MusicSelector, MusicTrackMetadata
 from src.publishers import (
     BasePublisher,
@@ -106,7 +107,10 @@ class DailyVideoPipeline:
         )
         self.image_selector = image_selector or ImageSelector(config=config)
         self.voice_generator = voice_generator or VoiceGenerator(config=config)
-        self.music_selector = music_selector or MusicSelector(config=config)
+        self.music_downloader = MusicDownloader(config=config)
+        self.music_selector = music_selector or MusicSelector(
+            config=config, downloader=self.music_downloader
+        )
         self.subtitle_generator = subtitle_generator or SubtitleGenerator()
         self.video_renderer = video_renderer or VideoRenderer(config=config)
         self.video_validator = video_validator or VideoValidator(config=config)
@@ -337,7 +341,11 @@ class DailyVideoPipeline:
 
         temp_audio_dir = Path(tempfile.mkdtemp(prefix=f"auto_video_audio_{prod_date}_"))
         try:
-            # Stage 7: Generate narration audio via Piper TTS
+            # Stage 7: Generate narration audio via Piper TTS (respecting AI dramatic pauses)
+            inter_pauses = [
+                getattr(s, "pause_after", self.config.piper_sentence_silence)
+                for s in story.scenes[:-1]
+            ]
             try:
                 audio_segments, master_wav, total_duration = (
                     self.voice_generator.generate_scene_narrations(
@@ -354,10 +362,13 @@ class DailyVideoPipeline:
                 logger.error("Stage 7 [Voice Generation] failed: %s", exc)
                 return EXIT_ASSET_OR_TTS_ERROR
 
-            # Stage 8: Select and validate background music
+            # Stage 8: Select and validate background music (auto-downloading if needed)
             try:
+                music_style = getattr(story, "music_style", "")
                 music_track: Optional[MusicTrackMetadata] = (
-                    self.music_selector.select_music(story.mood)
+                    self.music_selector.select_music(
+                        story_mood=story.mood, music_style=music_style
+                    )
                 )
                 run_record.music_metadata = (
                     music_track.to_dict() if music_track is not None else None
@@ -376,6 +387,7 @@ class DailyVideoPipeline:
             try:
                 cues = self.subtitle_generator.build_cues(
                     audio_segments=audio_segments,
+                    inter_scene_pauses=inter_pauses,
                     inter_scene_pause_seconds=self.config.piper_sentence_silence,
                     max_video_duration=total_duration,
                 )
@@ -409,6 +421,7 @@ class DailyVideoPipeline:
                     story_title=story.title,
                     total_duration_seconds=total_duration,
                     music_track=music_track,
+                    inter_scene_pauses=inter_pauses,
                     inter_scene_pause_seconds=self.config.piper_sentence_silence,
                     diagnostics_dir=day_output_dir / "diagnostics",
                 )

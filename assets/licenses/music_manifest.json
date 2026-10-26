@@ -1,6 +1,66 @@
 {
   "version": 1,
   "tracks": {
+    "betrayal_tension_strings.wav": {
+      "title": "Shadows of Deceit",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/betrayal_tension_strings.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'Shadows of Deceit' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "betrayal",
+        "cheating",
+        "deceit",
+        "revenge",
+        "lies",
+        "tension",
+        "dark",
+        "drama",
+        "suspense"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
+    "heartbreak_piano.wav": {
+      "title": "Unspoken Tears",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/heartbreak_piano.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'Unspoken Tears' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "heartbreak",
+        "broken",
+        "sorrow",
+        "tears",
+        "loss",
+        "sad",
+        "sadness",
+        "pain",
+        "piano"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
+    "revenge_karma.wav": {
+      "title": "The Final Departure",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/revenge_karma.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'The Final Departure' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "revenge",
+        "karma",
+        "climax",
+        "betrayal",
+        "drama",
+        "tension"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
     "sad_piano_ambient.wav": {
       "title": "Quiet Rain Reflections",
       "creator": "Auto Story Video Acoustic Synth",

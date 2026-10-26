@@ -255,5 +255,88 @@
       "buildings",
       "road"
     ]
+  },
+  "betrayal/unlocked_phone_message_midnight.jpg": {
+    "creator": "Auto Story Video Procedural Studio",
+    "source_url": "local://assets/backgrounds/betrayal/unlocked_phone_message_midnight.jpg",
+    "license": "CC0 1.0 Universal (Public Domain Dedication)",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "Procedural artwork 'unlocked_phone_message_midnight.jpg' dedicated to the Public Domain (CC0 1.0).",
+    "tags": [
+      "betrayal",
+      "phone",
+      "message",
+      "cheating",
+      "secret",
+      "dark",
+      "midnight",
+      "deceit"
+    ]
+  },
+  "betrayal/broken_mirror_shadowed_room.jpg": {
+    "creator": "Auto Story Video Procedural Studio",
+    "source_url": "local://assets/backgrounds/betrayal/broken_mirror_shadowed_room.jpg",
+    "license": "CC0 1.0 Universal (Public Domain Dedication)",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "Procedural artwork 'broken_mirror_shadowed_room.jpg' dedicated to the Public Domain (CC0 1.0).",
+    "tags": [
+      "betrayal",
+      "mirror",
+      "reflection",
+      "shadow",
+      "shattered",
+      "lies",
+      "drama"
+    ]
+  },
+  "heartbreak/empty_wedding_ring_bedside.jpg": {
+    "creator": "Auto Story Video Procedural Studio",
+    "source_url": "local://assets/backgrounds/heartbreak/empty_wedding_ring_bedside.jpg",
+    "license": "CC0 1.0 Universal (Public Domain Dedication)",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "Procedural artwork 'empty_wedding_ring_bedside.jpg' dedicated to the Public Domain (CC0 1.0).",
+    "tags": [
+      "heartbreak",
+      "ring",
+      "table",
+      "alone",
+      "departure",
+      "tears",
+      "sadness",
+      "loss"
+    ]
+  },
+  "heartbreak/solitary_walk_neon_rain.jpg": {
+    "creator": "Auto Story Video Procedural Studio",
+    "source_url": "local://assets/backgrounds/heartbreak/solitary_walk_neon_rain.jpg",
+    "license": "CC0 1.0 Universal (Public Domain Dedication)",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "Procedural artwork 'solitary_walk_neon_rain.jpg' dedicated to the Public Domain (CC0 1.0).",
+    "tags": [
+      "heartbreak",
+      "walking",
+      "rain",
+      "neon",
+      "umbrella",
+      "lonely",
+      "goodbye"
+    ]
+  },
+  "revenge/silent_departure_dawn_highway.jpg": {
+    "creator": "Auto Story Video Procedural Studio",
+    "source_url": "local://assets/backgrounds/revenge/silent_departure_dawn_highway.jpg",
+    "license": "CC0 1.0 Universal (Public Domain Dedication)",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "Procedural artwork 'silent_departure_dawn_highway.jpg' dedicated to the Public Domain (CC0 1.0).",
+    "tags": [
+      "revenge",
+      "highway",
+      "dawn",
+      "car",
+      "karma",
+      "leaving",
+      "dignity",
+      "strong"
+    ]
   }
 }

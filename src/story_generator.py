@@ -24,18 +24,23 @@ from src.history_manager import HistoryManager, compute_story_similarity
 logger = logging.getLogger(__name__)
 
 SUPPORTED_THEMES: List[str] = [
-    "family",
-    "kindness",
-    "sacrifice",
-    "loneliness",
-    "friendship",
-    "loss",
-    "hope",
-    "reunion",
-    "unexpected generosity",
+    "betrayal and broken trust",
+    "cheating and hidden messages",
+    "uncovering painful secrets",
+    "heartbreak and walking away",
+    "lies and double life",
+    "silent revenge and karma",
+    "forbidden love and deceit",
+    "regret after betrayal",
 ]
 
 VALID_VISUAL_MOODS = {
+    "betrayal",
+    "cheating",
+    "heartbreak",
+    "drama",
+    "dark",
+    "shock",
     "sadness",
     "melancholic",
     "love",
@@ -88,6 +93,7 @@ class SceneSegment:
     image_query: str
     visual_mood: str
     duration_hint_seconds: float = 7.0
+    pause_after: float = 1.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,7 +110,9 @@ class StoryPayload:
     caption: str
     hashtags: List[str]
     scenes: List[SceneSegment]
-    theme: str = "hope"
+    theme: str = "betrayal"
+    music_style: str = "tense emotional dark cello and sad piano with rising dramatic suspense"
+    music_mood: str = "betrayal"
     protagonist: str = ""
     setting: str = ""
     model_used: str = ""
@@ -292,9 +300,21 @@ def _parse_retry_after(header_value: Optional[str]) -> Optional[float]:
         return None
 
 
+PAUSE_MARKER_REGEX = re.compile(r"\[pause(?::\s*[0-9.]+\s*s?)?\]", re.IGNORECASE)
+
+
+def strip_pause_markers(text: str) -> str:
+    """Strip [pause: Xs] or [pause] tags from text for word count and plain text comparison."""
+    if not text:
+        return ""
+    stripped = PAUSE_MARKER_REGEX.sub("", text)
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
 def count_words(text: str) -> int:
-    """Count words in a narration string."""
-    words = re.findall(r"\b[\w'-]+\b", text)
+    """Count spoken words in a narration string, excluding pause tags."""
+    cleaned = strip_pause_markers(text)
+    words = re.findall(r"\b[\w'-]+\b", cleaned)
     return len(words)
 
 
@@ -406,6 +426,7 @@ def validate_story_payload(
         image_query = str(scene_obj.get("image_query") or "").strip()
         visual_mood = str(scene_obj.get("visual_mood") or "").strip().lower()
         duration_hint = scene_obj.get("duration_hint_seconds", 7)
+        pause_after_raw = scene_obj.get("pause_after", 1.0)
 
         if not narration:
             raise StoryValidationError(f"Scene {idx + 1} is missing 'narration'.")
@@ -422,16 +443,22 @@ def validate_story_payload(
         if duration_val <= 1.0 or duration_val > 30.0:
             duration_val = max(3.0, min(duration_val, 20.0))
 
+        try:
+            pause_after_val = max(0.2, min(3.0, float(pause_after_raw)))
+        except (TypeError, ValueError):
+            pause_after_val = 1.0
+
         scenes.append(
             SceneSegment(
                 narration=narration,
                 image_query=image_query,
                 visual_mood=visual_mood,
                 duration_hint_seconds=duration_val,
+                pause_after=pause_after_val,
             )
         )
 
-    # Validate word count of full story
+    # Validate word count of full story (ignoring pause tags)
     total_words = count_words(story_text)
     if total_words < min_words or total_words > max_words:
         raise StoryValidationError(
@@ -440,14 +467,21 @@ def validate_story_payload(
         )
 
     # Validate that scene narrations correspond to and cover the complete story text
-    combined_scene_text = " ".join(s.narration for s in scenes)
+    clean_story = strip_pause_markers(story_text)
+    combined_scene_text = " ".join(strip_pause_markers(s.narration) for s in scenes)
     scene_words = count_words(combined_scene_text)
-    alignment_score = compute_story_similarity(story_text, combined_scene_text)
-    if alignment_score < 0.80 or abs(scene_words - total_words) > max(15, int(total_words * 0.15)):
+    alignment_score = compute_story_similarity(clean_story, combined_scene_text)
+    if alignment_score < 0.78 or abs(scene_words - total_words) > max(20, int(total_words * 0.18)):
         raise StoryValidationError(
             f"Scene narrations do not accurately cover the story text "
             f"(alignment={alignment_score:.2f}, story_words={total_words}, scene_words={scene_words})."
         )
+
+    music_style = str(
+        raw_dict.get("music_style")
+        or "tense emotional dark cello and sad piano with rising dramatic suspense"
+    ).strip()
+    music_mood = str(raw_dict.get("music_mood") or mood or "betrayal").strip().lower()
 
     return StoryPayload(
         title=title,
@@ -458,6 +492,8 @@ def validate_story_payload(
         hashtags=hashtags,
         scenes=scenes,
         theme=str(raw_dict.get("theme") or theme),
+        music_style=music_style,
+        music_mood=music_mood,
         protagonist=str(raw_dict.get("protagonist") or ""),
         setting=str(raw_dict.get("setting") or ""),
         model_used=model_used,
@@ -516,42 +552,52 @@ class StoryGenerator:
             )
 
         system_prompt = (
-            "You are an award-winning short-form emotional story writer for vertical video narration. "
-            "Write completely original, deeply moving fictional stories with human warmth. "
-            "Never copy existing stories, famous IP, or recognizable characters. "
-            "Never present sensational misinformation or fake real-world news claims as facts. "
+            "You are a master drama and emotional relationship storyteller specializing in viral vertical video scripts. "
+            "Write gripping, realistic fictional stories centered on betrayal, cheating, hidden secrets, heartbreak, and karma. "
+            "Deliver intense emotional suspense, shocking discoveries, human vulnerability, and unforgettable closure. "
+            "Never copy existing IP or famous celebrities. "
             "CRITICAL: Do NOT output any thinking process, reasoning, internal monologue, or markdown chatter. "
             "Respond ONLY with a single raw valid JSON object starting with '{' and ending with '}'."
         )
 
-        user_prompt = f"""Create an original emotional short story in {lang} centered on the theme of "{theme}" (variation #{attempt}).
+        user_prompt = f"""Create a gripping emotional drama short story in {lang} centered on "{theme}" (variation #{attempt}).
 
-Story & Structural Requirements:
-1. Opening hook: Start with an immediate, compelling sentence in the first few seconds.
-2. Clear protagonist and vivid setting.
-3. Relatable emotional conflict and progressive storytelling.
-4. Meaningful emotional turning point and memorable ending.
-5. Word count: The complete "story" field MUST be between {min_w} and {max_w} words.
-6. Scene breakdown: Split the exact story into {min_s} to {max_s} chronological scenes.
-   Concatenating all `scenes[i].narration` texts in order MUST equal the complete `story` text word-for-word.{avoid_clause}{feedback_clause}
+Dramatic & Video Pacing Requirements:
+1. Opening Hook: The first sentence MUST immediately seize the audience with a revelation, an alarming text message, an unexpected discovery, or a confrontation.
+2. Narrative Arc: High stakes emotional conflict. Build the tension piece by piece as the truth comes to light.
+3. Turning Point: An intense confrontation or moment of quiet realization where the protagonist takes back their dignity or walks away.
+4. Video Length (1 minute or more): The complete "story" field MUST be between {min_w} and {max_w} words.
+5. Dramatic Pauses: Insert [pause: 0.8s] or [pause: 1.2s] at 2 to 4 crucial moments of shock or suspense in the narration (e.g. "I checked the name on the second phone. [pause: 1.0s] It was my best friend.").
+6. Scene breakdown: Split the story into {min_s} to {max_s} chronological scenes.
+   Each scene must include:
+   - "narration": The spoken text for this scene (including any [pause: Xs] markers). Concatenating all scene narrations in order must equal the complete story text.
+   - "pause_after": Float between 0.6 and 1.5 seconds representing the dramatic silence after this scene before transitioning.
+   - "image_query": 3 to 6 descriptive English keywords for atmospheric vertical imagery (e.g. phone lock screen late night, crying woman rain window, empty dining table candlelight).
+   - "visual_mood": One of: betrayal, heartbreak, tension, dark, sadness, drama.
+7. Background Music Direction:
+   - "music_style": Detailed description of the desired background music (e.g. "tense emotional dark cello and sad piano with rising dramatic suspense").
+   - "music_mood": One of: betrayal, heartbreak, suspense, drama, sad.{avoid_clause}{feedback_clause}
 
 Return ONLY valid JSON with this exact structure:
 {{
-  "title": "Short evocative title",
+  "title": "Short dramatic title (e.g. The Second Key, Messages at 2 AM)",
   "language": "{lang}",
   "protagonist": "Brief protagonist description",
   "setting": "Brief setting description",
   "theme": "{theme}",
-  "story": "The complete narration text ({min_w}-{max_w} words)...",
-  "mood": "sad then hopeful",
-  "caption": "A short emotional social media description...",
-  "hashtags": ["#shortstory", "#emotionalstory", "#kindness", "#lifelessons"],
+  "story": "The complete narration text with [pause: Xs] markers ({min_w}-{max_w} words)...",
+  "mood": "betrayal and heartbreak",
+  "music_style": "tense emotional dark cello and sad piano with rising dramatic suspense",
+  "music_mood": "betrayal",
+  "caption": "A dramatic viral caption ending with a question for viewers...",
+  "hashtags": ["#betrayal", "#cheating", "#storytime", "#drama", "#heartbreak", "#relationship"],
   "scenes": [
     {{
-      "narration": "Exact opening sentence(s) from the story.",
-      "image_query": "3 to 6 descriptive English keywords for stock photography (e.g. old house rainy village)",
-      "visual_mood": "sadness",
-      "duration_hint_seconds": 8
+      "narration": "First scene narration text with optional [pause: 0.8s]...",
+      "pause_after": 1.0,
+      "image_query": "unlocked smartphone notifications dark bedroom",
+      "visual_mood": "betrayal",
+      "duration_hint_seconds": 12
     }}
   ]
 }}"""

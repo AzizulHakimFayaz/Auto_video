@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import shutil
 import struct
 import subprocess
 import wave
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -66,6 +67,60 @@ class VoiceGenerationError(RuntimeError):
 
 
 @dataclass
+class SpokenChunk:
+    """A single continuous utterance within a scene, followed by an optional dramatic pause."""
+
+    text: str
+    duration_seconds: float
+    pause_after_seconds: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+PAUSE_REGEX = re.compile(r"\[pause(?::\s*([0-9]+(?:\.[0-9]+)?)s?)?\]", re.IGNORECASE)
+
+
+def split_narration_pauses(text: str) -> List[Tuple[str, float]]:
+    """Split narration text on [pause: Xs] or [pause] tags into (speech_text, pause_after_seconds)."""
+    matches = list(PAUSE_REGEX.finditer(text))
+    if not matches:
+        return [(text.strip(), 0.0)]
+
+    chunks: List[Tuple[str, float]] = []
+    last_end = 0
+    for m in matches:
+        speech = text[last_end : m.start()].strip()
+        pause_sec = float(m.group(1)) if m.group(1) else 1.0
+        if speech:
+            chunks.append((speech, pause_sec))
+        last_end = m.end()
+
+    trailing = text[last_end:].strip()
+    if trailing:
+        chunks.append((trailing, 0.0))
+    return chunks
+
+
+def create_silence_wav(
+    output_path: Path,
+    duration_seconds: float,
+    sample_rate: int = 22050,
+    n_channels: int = 1,
+    sampwidth: int = 2,
+) -> None:
+    """Create a PCM 16-bit silence WAV file of specified duration."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    num_frames = max(1, int(round(duration_seconds * sample_rate)))
+    silence_bytes = b"\x00" * (num_frames * n_channels * sampwidth)
+    with wave.open(str(output_path), "wb") as wf:
+        wf.setnchannels(n_channels)
+        wf.setsampwidth(sampwidth)
+        wf.setframerate(sample_rate)
+        wf.writeframes(silence_bytes)
+
+
+@dataclass
 class AudioSegmentResult:
     """Metadata and timing for a synthesized scene narration WAV file."""
 
@@ -76,9 +131,12 @@ class AudioSegmentResult:
     sample_rate: int
     voice_used: str
     license_status: str
+    spoken_chunks: List[SpokenChunk] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["spoken_chunks"] = [c.to_dict() for c in self.spoken_chunks]
+        return data
 
 
 def validate_wav_file(wav_path: Path, min_duration_seconds: float = 0.2) -> Tuple[float, int]:
@@ -152,7 +210,8 @@ def scale_wav_volume(wav_path: Path, volume_factor: float) -> None:
 def concatenate_wav_files(
     segment_paths: List[Path],
     output_path: Path,
-    inter_scene_pause_seconds: float = 0.25,
+    inter_scene_pauses: Optional[List[float]] = None,
+    inter_scene_pause_seconds: float = 0.55,
 ) -> float:
     """Combine multiple scene WAV files into a single master narration WAV file."""
     if not segment_paths:
@@ -164,9 +223,6 @@ def concatenate_wav_files(
     with wave.open(str(segment_paths[0]), "rb") as first_wf:
         n_channels = first_wf.getnchannels()
         sampwidth = first_wf.getsampwidth()
-
-    pause_frames = int(round(inter_scene_pause_seconds * sample_rate))
-    silence_bytes = b"\x00" * (pause_frames * n_channels * sampwidth)
 
     with wave.open(str(output_path), "wb") as out_wf:
         out_wf.setnchannels(n_channels)
@@ -184,8 +240,17 @@ def concatenate_wav_files(
                         f"WAV format mismatch across narration segments at {seg_path}."
                     )
                 out_wf.writeframes(in_wf.readframes(in_wf.getnframes()))
-            if idx < len(segment_paths) - 1 and pause_frames > 0:
-                out_wf.writeframes(silence_bytes)
+
+            if idx < len(segment_paths) - 1:
+                pause_s = (
+                    inter_scene_pauses[idx]
+                    if inter_scene_pauses and idx < len(inter_scene_pauses)
+                    else inter_scene_pause_seconds
+                )
+                if pause_s > 0.0:
+                    pause_frames = int(round(pause_s * sample_rate))
+                    silence_bytes = b"\x00" * (pause_frames * n_channels * sampwidth)
+                    out_wf.writeframes(silence_bytes)
 
     total_duration, _ = validate_wav_file(output_path)
     return total_duration
@@ -386,61 +451,24 @@ class VoiceGenerator:
             wf.setframerate(sample_rate)
             wf.writeframes(bytes(samples))
 
-    def synthesize_segment(
-        self,
-        text: str,
-        output_wav: Path,
-        scene_index: int = 0,
-    ) -> AudioSegmentResult:
-        """Synthesize a single scene narration into a validated WAV file."""
-        clean_text = " ".join(text.strip().split())
-        if not clean_text:
-            raise VoiceGenerationError(
-                f"Scene {scene_index + 1} narration text is empty; cannot synthesize audio."
-            )
-
-        output_wav.parent.mkdir(parents=True, exist_ok=True)
+    def _synthesize_speech_audio(self, text: str, output_wav: Path) -> Tuple[str, str]:
+        """Synthesize a single continuous speech utterance using Piper or offline fallback."""
         piper_bin = self._locate_piper_binary()
-
         if piper_bin is not None:
             model_meta = self.verify_model_and_license()
             self._synthesize_with_piper_cli(
-                text=clean_text,
+                text=text,
                 output_wav=output_wav,
                 model_path=Path(model_meta["model_path"]),
                 config_path=Path(model_meta["config_path"]),
                 piper_bin=piper_bin,
             )
-            scale_wav_volume(output_wav, self.config.piper_volume)
-            duration, sample_rate = validate_wav_file(output_wav)
-            return AudioSegmentResult(
-                scene_index=scene_index,
-                narration_text=clean_text,
-                audio_path=str(output_wav.resolve()),
-                duration_seconds=round(duration, 3),
-                sample_rate=sample_rate,
-                voice_used=model_meta["voice_key"],
-                license_status=model_meta["license_status"],
-            )
+            return model_meta["voice_key"], model_meta["license_status"]
 
         if self.config.allow_Offline_tts_fallback:
-            logger.warning(
-                "Piper binary/model not found; using ALLOW_OFFLINE_TTS_FALLBACK local wave synthesizer for scene %d.",
-                scene_index + 1,
-            )
-            self._synthesize_offline_fallback_wav(clean_text, output_wav)
-            duration, sample_rate = validate_wav_file(output_wav)
-            return AudioSegmentResult(
-                scene_index=scene_index,
-                narration_text=clean_text,
-                audio_path=str(output_wav.resolve()),
-                duration_seconds=round(duration, 3),
-                sample_rate=sample_rate,
-                voice_used="offline-local-synth-fallback",
-                license_status="Public Domain (Procedural Local Audio)",
-            )
+            self._synthesize_offline_fallback_wav(text, output_wav)
+            return "offline-local-synth-fallback", "Public Domain (Procedural Local Audio)"
 
-        # Fail clearly when Piper binary or model is missing
         self.verify_model_and_license()
         raise VoiceGenerationError(
             f"Piper executable '{self.config.piper_executable}' was not found on PATH. "
@@ -448,11 +476,101 @@ class VoiceGenerator:
             "and configure PIPER_EXECUTABLE and PIPER_MODEL_PATH."
         )
 
+    def synthesize_segment(
+        self,
+        text: str,
+        output_wav: Path,
+        scene_index: int = 0,
+    ) -> AudioSegmentResult:
+        """Synthesize a single scene narration into a validated WAV file, respecting pause markers."""
+        chunks = split_narration_pauses(text)
+        if not chunks or (len(chunks) == 1 and not chunks[0][0]):
+            raise VoiceGenerationError(
+                f"Scene {scene_index + 1} narration text is empty; cannot synthesize audio."
+            )
+
+        output_wav.parent.mkdir(parents=True, exist_ok=True)
+        has_explicit_pauses = len(chunks) > 1 or (len(chunks) == 1 and chunks[0][1] > 0.0)
+
+        if has_explicit_pauses:
+            temp_dir = output_wav.parent / f"_pause_parts_{output_wav.stem}"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                sub_paths: List[Path] = []
+                spoken_chunks: List[SpokenChunk] = []
+                voice_used = ""
+                license_status = ""
+                sample_rate = 22050
+
+                for c_idx, (speech_text, pause_sec) in enumerate(chunks):
+                    if speech_text:
+                        c_wav = temp_dir / f"chunk_{c_idx}.wav"
+                        voice_used, license_status = self._synthesize_speech_audio(speech_text, c_wav)
+                        dur, sample_rate = validate_wav_file(c_wav)
+                        sub_paths.append(c_wav)
+                        spoken_chunks.append(
+                            SpokenChunk(
+                                text=speech_text,
+                                duration_seconds=round(dur, 3),
+                                pause_after_seconds=round(pause_sec, 3),
+                            )
+                        )
+                    if pause_sec > 0.0 and (c_idx < len(chunks) - 1 or speech_text):
+                        p_wav = temp_dir / f"pause_{c_idx}.wav"
+                        create_silence_wav(p_wav, pause_sec, sample_rate=sample_rate)
+                        sub_paths.append(p_wav)
+
+                if not sub_paths:
+                    raise VoiceGenerationError(f"No audio produced for scene {scene_index + 1}.")
+
+                concatenate_wav_files(
+                    segment_paths=sub_paths,
+                    output_path=output_wav,
+                    inter_scene_pause_seconds=0.0,
+                )
+                scale_wav_volume(output_wav, self.config.piper_volume)
+                total_dur, sr = validate_wav_file(output_wav)
+                clean_text = " ".join(c[0] for c in chunks if c[0])
+                return AudioSegmentResult(
+                    scene_index=scene_index,
+                    narration_text=clean_text,
+                    audio_path=str(output_wav.resolve()),
+                    duration_seconds=round(total_dur, 3),
+                    sample_rate=sr,
+                    voice_used=voice_used,
+                    license_status=license_status,
+                    spoken_chunks=spoken_chunks,
+                )
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+        # Single continuous speech without pause tags:
+        clean_text = " ".join(chunks[0][0].split())
+        voice_used, license_status = self._synthesize_speech_audio(clean_text, output_wav)
+        scale_wav_volume(output_wav, self.config.piper_volume)
+        duration, sample_rate = validate_wav_file(output_wav)
+        return AudioSegmentResult(
+            scene_index=scene_index,
+            narration_text=clean_text,
+            audio_path=str(output_wav.resolve()),
+            duration_seconds=round(duration, 3),
+            sample_rate=sample_rate,
+            voice_used=voice_used,
+            license_status=license_status,
+            spoken_chunks=[
+                SpokenChunk(
+                    text=clean_text,
+                    duration_seconds=round(duration, 3),
+                    pause_after_seconds=0.0,
+                )
+            ],
+        )
+
     def generate_scene_narrations(
         self,
         scenes: List[SceneSegment],
         work_dir: Path,
-        inter_scene_pause_seconds: float = 0.25,
+        inter_scene_pause_seconds: float = 0.55,
     ) -> Tuple[List[AudioSegmentResult], Path, float]:
         """Generate individual WAV files for every scene plus a combined narration WAV.
 
@@ -479,10 +597,12 @@ class VoiceGenerator:
                 seg_wav.name,
             )
 
+        inter_pauses = [getattr(s, "pause_after", inter_scene_pause_seconds) for s in scenes[:-1]]
         combined_wav = work_dir / "narration_master.wav"
         total_duration = concatenate_wav_files(
             segment_paths=segment_paths,
             output_path=combined_wav,
+            inter_scene_pauses=inter_pauses,
             inter_scene_pause_seconds=inter_scene_pause_seconds,
         )
         logger.info(

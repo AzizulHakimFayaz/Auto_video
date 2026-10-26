@@ -98,6 +98,8 @@ def test_story_generator_retries_rate_limit_and_succeeds(tmp_path: Path) -> None
         openrouter_api_key="sk-or-v1-secretkey123456",
         openrouter_model="nvidia/nemotron-3-ultra-550b-a55b:free",
         openrouter_max_retries=3,
+        story_min_words=100,
+        story_max_words=130,
         history_file=tmp_path / "history.json",
     )
     valid_json_str = json.dumps(_sample_valid_story_dict())
@@ -131,6 +133,8 @@ def test_story_generator_uses_configured_free_fallback_model(tmp_path: Path) -> 
         openrouter_model="nvidia/nemotron-3-ultra-550b-a55b:free",
         openrouter_fallback_model="meta-llama/llama-3.3-70b-instruct:free,openrouter/free",
         openrouter_max_retries=2,
+        story_min_words=100,
+        story_max_words=130,
         history_file=tmp_path / "history.json",
     )
     valid_json_str = json.dumps(_sample_valid_story_dict("Fallback Free Model Story"))

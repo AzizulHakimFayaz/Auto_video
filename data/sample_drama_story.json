@@ -1,0 +1,64 @@
+{
+  "title": "The Message at Two AM",
+  "language": "English",
+  "protagonist": "Elena, an architect standing in her dark kitchen",
+  "setting": "A quiet suburban home illuminated by streetlights",
+  "theme": "betrayal and broken trust",
+  "story": "For three years, Elena believed her marriage was unbreakable. [pause: 0.8s] But at two in the morning, the phone on the nightstand buzzed with an incoming photo preview. The screen lit up in the cold darkness with a name saved under a contractor's alias. [pause: 1.0s] When she leaned closer, the preview showed two first-class boarding passes to Paris and a message that read: 'He still thinks you are at a conference.' Her breath caught in her throat. [pause: 1.2s] Standing in the quiet hallway, she remembered every anniversary dinner he had canceled for urgent business trips and every late-night phone call he answered in the backyard. She did not scream or wake him with furious tears. [pause: 1.0s] Instead, she calmly walked to the study, placed her diamond wedding ring directly over the flight itinerary on his desk, and picked up her car keys. Some people believe leaving is about anger and shouting. [pause: 0.8s] But the deepest departure is quiet, dignified, and forever.",
+  "mood": "betrayal and heartbreak",
+  "music_style": "tense emotional dark cello and sad piano with rising dramatic suspense",
+  "music_mood": "betrayal",
+  "caption": "When the truth is revealed in the quiet hours of the night, leaving isn't about anger—it's about reclaiming your peace. Would you have stayed to confront him?",
+  "hashtags": [
+    "#betrayal",
+    "#cheating",
+    "#heartbreak",
+    "#storytime",
+    "#drama",
+    "#relationship",
+    "#revenge",
+    "#lifelessons"
+  ],
+  "scenes": [
+    {
+      "scene_id": 1,
+      "narration": "For three years, Elena believed her marriage was unbreakable. [pause: 0.8s] But at two in the morning, the phone on the nightstand buzzed with an incoming photo preview.",
+      "pause_after": 1.0,
+      "image_query": "unlocked smartphone notifications dark bedroom midnight",
+      "visual_mood": "betrayal",
+      "duration_hint_seconds": 12.0
+    },
+    {
+      "scene_id": 2,
+      "narration": "The screen lit up in the cold darkness with a name saved under a contractor's alias. [pause: 1.0s] When she leaned closer, the preview showed two first-class boarding passes to Paris and a message that read: 'He still thinks you are at a conference.'",
+      "pause_after": 1.2,
+      "image_query": "broken mirror shadowed room reflection lies deceit",
+      "visual_mood": "betrayal",
+      "duration_hint_seconds": 15.0
+    },
+    {
+      "scene_id": 3,
+      "narration": "Her breath caught in her throat. [pause: 1.2s] Standing in the quiet hallway, she remembered every anniversary dinner he had canceled for urgent business trips and every late-night phone call he answered in the backyard.",
+      "pause_after": 1.0,
+      "image_query": "empty dining table candlelight shadows sadness",
+      "visual_mood": "heartbreak",
+      "duration_hint_seconds": 14.0
+    },
+    {
+      "scene_id": 4,
+      "narration": "She did not scream or wake him with furious tears. [pause: 1.0s] Instead, she calmly walked to the study, placed her diamond wedding ring directly over the flight itinerary on his desk, and picked up her car keys.",
+      "pause_after": 1.0,
+      "image_query": "empty wedding ring bedside table alone departure",
+      "visual_mood": "heartbreak",
+      "duration_hint_seconds": 14.0
+    },
+    {
+      "scene_id": 5,
+      "narration": "Some people believe leaving is about anger and shouting. [pause: 0.8s] But the deepest departure is quiet, dignified, and forever.",
+      "pause_after": 1.5,
+      "image_query": "silent departure dawn highway car headlights dignity",
+      "visual_mood": "revenge",
+      "duration_hint_seconds": 12.0
+    }
+  ]
+}

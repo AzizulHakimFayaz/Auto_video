@@ -136,9 +136,9 @@ class AppConfig:
 
     # Story configuration
     story_language: str = "English"
-    story_min_words: int = 100
-    story_max_words: int = 130
-    story_min_scenes: int = 4
+    story_min_words: int = 150
+    story_max_words: int = 190
+    story_min_scenes: int = 5
     story_max_scenes: int = 8
     story_similarity_threshold: float = 0.65
 
@@ -158,17 +158,19 @@ class AppConfig:
     piper_model_path: Optional[Path] = None
     piper_config_path: Optional[Path] = None
     piper_speaker_id: Optional[int] = None
-    piper_length_scale: float = 1.0  # Speech speed inverse (1.0 = normal, <1 faster, >1 slower)
+    piper_length_scale: float = 1.05  # Speech speed (1.05 = suspenseful deliberate pace)
     piper_volume: float = 1.0
-    piper_sentence_silence: float = 0.25
+    piper_sentence_silence: float = 0.55  # Breath pause between sentences
     allow_Offline_tts_fallback: bool = False
 
     # Audio & Background Music
     allow_narration_only_fallback: bool = True
-    music_volume: float = 0.14
+    music_volume: float = 0.28  # Rich, audible cinematic presence
     music_fade_in_seconds: float = 1.5
     music_fade_out_seconds: float = 2.5
     enable_audio_ducking: bool = True
+    internet_archive_music_enabled: bool = True
+    freesound_api_key: str = ""
 
     # Video rendering
     video_width: int = 1080
@@ -198,7 +200,7 @@ class AppConfig:
     youtube_client_id: str = ""
     youtube_client_secret: str = ""
     youtube_refresh_token: str = ""
-    youtube_privacy_status: str = "private"  # private, unlisted, public
+    youtube_privacy_status: str = "public"  # public, unlisted, private
     youtube_category_id: str = "24"  # Entertainment
 
     # Instagram Graph API Credentials (Eligible Professional Business/Creator Account)
@@ -268,9 +270,9 @@ class AppConfig:
             ),
             openrouter_max_retries=_parse_int(os.getenv("OPENROUTER_MAX_RETRIES"), 3),
             story_language=os.getenv("STORY_LANGUAGE", "English").strip() or "English",
-            story_min_words=_parse_int(os.getenv("STORY_MIN_WORDS"), 100),
-            story_max_words=_parse_int(os.getenv("STORY_MAX_WORDS"), 130),
-            story_min_scenes=_parse_int(os.getenv("STORY_MIN_SCENES"), 4),
+            story_min_words=_parse_int(os.getenv("STORY_MIN_WORDS"), 150),
+            story_max_words=_parse_int(os.getenv("STORY_MAX_WORDS"), 190),
+            story_min_scenes=_parse_int(os.getenv("STORY_MIN_SCENES"), 5),
             story_max_scenes=_parse_int(os.getenv("STORY_MAX_SCENES"), 8),
             story_similarity_threshold=_parse_float(
                 os.getenv("STORY_SIMILARITY_THRESHOLD"), 0.65
@@ -288,19 +290,23 @@ class AppConfig:
             piper_model_path=_resolve_optional_path("PIPER_MODEL_PATH"),
             piper_config_path=_resolve_optional_path("PIPER_CONFIG_PATH"),
             piper_speaker_id=piper_speaker_id,
-            piper_length_scale=_parse_float(os.getenv("PIPER_LENGTH_SCALE"), 1.0),
+            piper_length_scale=_parse_float(os.getenv("PIPER_LENGTH_SCALE"), 1.05),
             piper_volume=_parse_float(os.getenv("PIPER_VOLUME"), 1.0),
-            piper_sentence_silence=_parse_float(os.getenv("PIPER_SENTENCE_SILENCE"), 0.25),
+            piper_sentence_silence=_parse_float(os.getenv("PIPER_SENTENCE_SILENCE"), 0.55),
             allow_Offline_tts_fallback=_parse_bool(
                 os.getenv("ALLOW_OFFLINE_TTS_FALLBACK"), False
             ),
             allow_narration_only_fallback=_parse_bool(
                 os.getenv("ALLOW_NARRATION_ONLY_FALLBACK"), True
             ),
-            music_volume=_parse_float(os.getenv("MUSIC_VOLUME"), 0.14),
+            music_volume=_parse_float(os.getenv("MUSIC_VOLUME"), 0.28),
             music_fade_in_seconds=_parse_float(os.getenv("MUSIC_FADE_IN_SECONDS"), 1.5),
             music_fade_out_seconds=_parse_float(os.getenv("MUSIC_FADE_OUT_SECONDS"), 2.5),
             enable_audio_ducking=_parse_bool(os.getenv("ENABLE_AUDIO_DUCKING"), True),
+            internet_archive_music_enabled=_parse_bool(
+                os.getenv("INTERNET_ARCHIVE_MUSIC_ENABLED"), True
+            ),
+            freesound_api_key=os.getenv("FREESOUND_API_KEY", "").strip(),
             video_width=_parse_int(os.getenv("VIDEO_WIDTH"), 1080),
             video_height=_parse_int(os.getenv("VIDEO_HEIGHT"), 1920),
             video_fps=_parse_int(os.getenv("VIDEO_FPS"), 30),
@@ -326,7 +332,7 @@ class AppConfig:
             youtube_client_id=os.getenv("YOUTUBE_CLIENT_ID", "").strip(),
             youtube_client_secret=os.getenv("YOUTUBE_CLIENT_SECRET", "").strip(),
             youtube_refresh_token=os.getenv("YOUTUBE_REFRESH_TOKEN", "").strip(),
-            youtube_privacy_status=os.getenv("YOUTUBE_PRIVACY_STATUS", "private").strip(),
+            youtube_privacy_status=os.getenv("YOUTUBE_PRIVACY_STATUS", "public").strip() or "public",
             youtube_category_id=os.getenv("YOUTUBE_CATEGORY_ID", "24").strip(),
             instagram_account_id=os.getenv("INSTAGRAM_ACCOUNT_ID", "").strip(),
             instagram_access_token=os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip(),
