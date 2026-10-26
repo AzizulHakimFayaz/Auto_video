@@ -129,8 +129,8 @@ class AppConfig:
     # OpenRouter / AI Story Generation (Strictly Free Models Only)
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
-    openrouter_fallback_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free"
+    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    openrouter_fallback_model: str = "openrouter/free"
     openrouter_timeout_seconds: int = 90
     openrouter_max_retries: int = 3
 
@@ -258,14 +258,14 @@ class AppConfig:
                 "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
             ).strip(),
             openrouter_model=os.getenv(
-                "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+                "OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
             ).strip()
-            or "meta-llama/llama-3.3-70b-instruct:free",
+            or "nvidia/nemotron-3-ultra-550b-a55b:free",
             openrouter_fallback_model=os.getenv(
                 "OPENROUTER_FALLBACK_MODEL",
-                "nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free",
+                "openrouter/free",
             ).strip()
-            or "nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free",
+            or "openrouter/free",
             openrouter_timeout_seconds=_parse_int(
                 os.getenv("OPENROUTER_TIMEOUT_SECONDS"), 90
             ),

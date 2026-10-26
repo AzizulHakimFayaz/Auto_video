@@ -190,17 +190,16 @@ def test_story_generator_uses_configured_free_fallback_model(tmp_path: Path) -> 
     assert result.model_used == "meta-llama/llama-3.3-70b-instruct:free"
 
 
-def test_app_config_defaults_use_multi_free_model_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_app_config_defaults_use_nemotron_primary_and_openrouter_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
     monkeypatch.delenv("OPENROUTER_FALLBACK_MODEL", raising=False)
 
     cfg = AppConfig.from_env()
 
-    assert cfg.openrouter_model == "meta-llama/llama-3.3-70b-instruct:free"
-    assert (
-        cfg.openrouter_fallback_model
-        == "nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free"
-    )
+    assert cfg.openrouter_model == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert cfg.openrouter_fallback_model == "openrouter/free"
 
 
 def test_zero_budget_policy_rejects_paid_model() -> None:
