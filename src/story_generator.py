@@ -713,7 +713,7 @@ class StoryGenerator:
             "Deliver intense emotional suspense, shocking discoveries, human vulnerability, and unforgettable closure. "
             "Never copy existing IP or famous celebrities. "
             "CRITICAL: Do NOT output any thinking process, reasoning, internal monologue, or markdown chatter. "
-            "Respond ONLY with a single raw valid JSON object starting with '{' and ending with '}'."
+            "Start your output directly with the opening curly brace '{' and respond ONLY with the single raw valid JSON object ending with '}'."
         )
 
         user_prompt = f"""Create a gripping emotional drama short story in {lang} centered on "{theme}" (variation #{attempt}).
@@ -815,7 +815,8 @@ Return ONLY valid JSON with this exact structure:
                         model=model_id,
                         messages=messages,
                         temperature=temperature,
-                        max_tokens=3500,
+                        max_tokens=4000,
+                        response_format={"type": "json_object"},
                     )
                     raw_content = (
                         completion.choices[0].message.content

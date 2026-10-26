@@ -129,12 +129,9 @@ class AppConfig:
     # OpenRouter / AI Story Generation (Strictly Free Models Only)
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_model: str = "openrouter/free"
-    openrouter_fallback_model: str = (
-        "google/gemma-2-9b-it:free,meta-llama/llama-3.1-8b-instruct:free,"
-        "mistralai/mistral-7b-instruct:free,nvidia/nemotron-3-ultra-550b-a55b:free"
-    )
-    openrouter_timeout_seconds: int = 60
+    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    openrouter_fallback_model: str = "openrouter/free"
+    openrouter_timeout_seconds: int = 90
     openrouter_max_retries: int = 3
 
     # Story configuration
@@ -261,16 +258,16 @@ class AppConfig:
                 "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
             ).strip(),
             openrouter_model=os.getenv(
-                "OPENROUTER_MODEL", "openrouter/free"
+                "OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
             ).strip()
-            or "openrouter/free",
+            or "nvidia/nemotron-3-ultra-550b-a55b:free",
             openrouter_fallback_model=os.getenv(
                 "OPENROUTER_FALLBACK_MODEL",
-                "google/gemma-2-9b-it:free,meta-llama/llama-3.1-8b-instruct:free,mistralai/mistral-7b-instruct:free,nvidia/nemotron-3-ultra-550b-a55b:free",
+                "openrouter/free",
             ).strip()
-            or "google/gemma-2-9b-it:free,meta-llama/llama-3.1-8b-instruct:free,mistralai/mistral-7b-instruct:free,nvidia/nemotron-3-ultra-550b-a55b:free",
+            or "openrouter/free",
             openrouter_timeout_seconds=_parse_int(
-                os.getenv("OPENROUTER_TIMEOUT_SECONDS"), 60
+                os.getenv("OPENROUTER_TIMEOUT_SECONDS"), 90
             ),
             openrouter_max_retries=_parse_int(os.getenv("OPENROUTER_MAX_RETRIES"), 3),
             story_language=os.getenv("STORY_LANGUAGE", "English").strip() or "English",
