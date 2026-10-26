@@ -318,6 +318,116 @@ def count_words(text: str) -> int:
     return len(words)
 
 
+def repair_json_string(text: str) -> str:
+    """Repair common LLM JSON syntax mistakes before decoding."""
+    if not text:
+        return ""
+    # 1. Normalize unicode quotation marks and smart quotes
+    s = (
+        text.replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+    )
+
+    # 2. Fix missing commas between objects in an array: } \s* { -> },\n{
+    s = re.sub(r"\}\s*\{", "},\n{", s)
+
+    # 3. Fix missing commas between array elements: ] \s* [ -> ],\n[
+    s = re.sub(r"\]\s*\[", "],\n[", s)
+
+    # 4. Fix missing commas between string items in arrays: "item1" \s* "item2" -> "item1",\n"item2"
+    s = re.sub(r'(["\d])\s*\n\s*(")', r"\1,\n\2", s)
+
+    # 5. Fix missing commas between key-value pairs where next line starts with a key
+    s = re.sub(
+        r'("|\b(?:true|false|null|\d+(?:\.\d+)?))\s*\n\s*("[a-zA-Z0-9_]+"\s*:)',
+        r"\1,\n\2",
+        s,
+    )
+
+    # 6. Remove trailing commas before } or ]
+    s = re.sub(r",\s*([\}\]])", r"\1", s)
+
+    return s
+
+
+def extract_fields_fallback(raw: str) -> Dict[str, Any]:
+    """Extract fields using regex when JSON has syntax errors that json.loads cannot parse."""
+    res: Dict[str, Any] = {}
+
+    m_title = re.search(r'"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    if m_title:
+        try:
+            res["title"] = (
+                m_title.group(1).encode("utf-8").decode("unicode_escape", errors="ignore")
+            )
+        except Exception:
+            res["title"] = m_title.group(1)
+
+    m_lang = re.search(r'"language"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    res["language"] = m_lang.group(1) if m_lang else "English"
+
+    m_story = re.search(
+        r'"story"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"(?:mood|scenes|caption|music_style)',
+        raw,
+        re.DOTALL,
+    )
+    if not m_story:
+        m_story = re.search(r'"story"\s*:\s*"((?:[^"]|"(?!,\s*"\w+"))*)"', raw, re.DOTALL)
+    if m_story:
+        res["story"] = m_story.group(1).replace('\\"', '"').replace("\\n", " ")
+
+    m_mood = re.search(r'"mood"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    res["mood"] = m_mood.group(1) if m_mood else "betrayal"
+
+    m_cap = re.search(r'"caption"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    res["caption"] = m_cap.group(1) if m_cap else "Watch till the end to see the truth."
+
+    m_music_style = re.search(r'"music_style"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    if m_music_style:
+        res["music_style"] = m_music_style.group(1)
+
+    m_music_mood = re.search(r'"music_mood"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    if m_music_mood:
+        res["music_mood"] = m_music_mood.group(1)
+
+    m_theme = re.search(r'"theme"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+    if m_theme:
+        res["theme"] = m_theme.group(1)
+
+    m_tags = re.search(r'"hashtags"\s*:\s*\[(.*?)\]', raw, re.DOTALL)
+    if m_tags:
+        tags = re.findall(r'"(#[^"]+)"', m_tags.group(1))
+        res["hashtags"] = tags or ["#betrayal", "#storytime", "#drama"]
+    else:
+        res["hashtags"] = ["#betrayal", "#storytime", "#drama"]
+
+    # Extract scenes
+    scenes: List[Dict[str, Any]] = []
+    scene_matches = re.findall(r'\{\s*"narration".*?\}', raw, re.DOTALL)
+    for sm in scene_matches:
+        narr = re.search(r'"narration"\s*:\s*"((?:[^"\\]|\\.)*)"', sm)
+        query = re.search(r'"image_query"\s*:\s*"([^"]*)"', sm)
+        vmood = re.search(r'"visual_mood"\s*:\s*"([^"]*)"', sm)
+        pause = re.search(r'"pause_after"\s*:\s*([0-9.]+)', sm)
+        dur = re.search(r'"duration_hint_seconds"\s*:\s*([0-9.]+)', sm)
+        if narr:
+            scenes.append(
+                {
+                    "narration": narr.group(1).replace('\\"', '"'),
+                    "image_query": query.group(1) if query else "emotional drama cinematic",
+                    "visual_mood": vmood.group(1) if vmood else "betrayal",
+                    "pause_after": float(pause.group(1)) if pause else 1.0,
+                    "duration_hint_seconds": float(dur.group(1)) if dur else 7.0,
+                }
+            )
+    if scenes:
+        res["scenes"] = scenes
+
+    return res
+
+
 def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
     """Extract and parse a JSON object from raw LLM output, stripping Markdown fences and reasoning."""
     if not raw_text or not raw_text.strip():
@@ -340,20 +450,59 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
         first_brace = cleaned.find("{")
         last_brace = cleaned.rfind("}")
         if first_brace == -1 or last_brace == -1 or last_brace <= first_brace:
+            salvaged = extract_fields_fallback(cleaned)
+            if salvaged.get("story") and salvaged.get("scenes"):
+                return salvaged
             snippet = cleaned[:250].replace("\n", " ")
             raise StoryValidationError(
                 f"No JSON object found in model output. Model returned: {snippet!r}"
             )
         candidate = cleaned[first_brace : last_brace + 1]
 
+    # 1. Attempt direct JSON parse
     try:
         parsed = json.loads(candidate)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Attempt repaired JSON parse
+    repaired = repair_json_string(candidate)
+    try:
+        parsed = json.loads(repaired)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # 3. Attempt closing unclosed braces/brackets if truncated
+    try:
+        open_curly = repaired.count("{") - repaired.count("}")
+        open_square = repaired.count("[") - repaired.count("]")
+        fixed = repaired
+        fixed = re.sub(r",\s*$", "", fixed.strip())
+        fixed = re.sub(r'"[^"]*"\s*:\s*$', "", fixed.strip())
+        fixed += "]" * max(0, open_square)
+        fixed += "}" * max(0, open_curly)
+        parsed = json.loads(repair_json_string(fixed))
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # 4. Fallback regex field extraction
+    salvaged = extract_fields_fallback(candidate)
+    if salvaged.get("title") and salvaged.get("story") and salvaged.get("scenes"):
+        return salvaged
+
+    # 5. If everything failed, raise descriptive error
+    try:
+        json.loads(candidate)
     except json.JSONDecodeError as exc:
         raise StoryValidationError(f"Malformed JSON in model output: {exc}") from exc
 
-    if not isinstance(parsed, dict):
-        raise StoryValidationError("Top-level JSON value must be an object.")
-    return parsed
+    raise StoryValidationError("Top-level JSON value must be an object.")
 
 
 def validate_story_payload(
@@ -460,10 +609,17 @@ def validate_story_payload(
 
     # Validate word count of full story (ignoring pause tags)
     total_words = count_words(story_text)
-    if total_words < min_words or total_words > max_words:
+    # Allow a reasonable tolerance window so minor variations (e.g. 149 words against 150)
+    # don't fail an otherwise high quality generation, while still ensuring a 1+ minute video.
+    under_tolerance = min(30, max(5, int(min_words * 0.15)))
+    over_tolerance = min(35, max(10, int(max_words * 0.20)))
+    effective_min = max(90, min_words - under_tolerance)
+    effective_max = max_words + over_tolerance
+
+    if total_words < effective_min or total_words > effective_max:
         raise StoryValidationError(
-            f"Story word count ({total_words}) is outside configured bounds "
-            f"[{min_words}, {max_words}]."
+            f"Story word count ({total_words}) is outside allowed bounds "
+            f"[{effective_min}, {effective_max}] (target was {min_words}-{max_words})."
         )
 
     # Validate that scene narrations correspond to and cover the complete story text
@@ -576,7 +732,11 @@ Dramatic & Video Pacing Requirements:
    - "visual_mood": One of: betrayal, heartbreak, tension, dark, sadness, drama.
 7. Background Music Direction:
    - "music_style": Detailed description of the desired background music (e.g. "tense emotional dark cello and sad piano with rising dramatic suspense").
-   - "music_mood": One of: betrayal, heartbreak, suspense, drama, sad.{avoid_clause}{feedback_clause}
+   - "music_mood": One of: betrayal, heartbreak, suspense, drama, sad.
+8. JSON Formatting Requirements:
+   - Output valid JSON only, starting with {{ and ending with }}.
+   - When quoting dialogue inside narration strings, ALWAYS use single quotes (e.g. He whispered, 'Why did you do it?') to prevent broken JSON syntax.
+   - Separate all properties and array items with commas. Never leave trailing commas.{avoid_clause}{feedback_clause}
 
 Return ONLY valid JSON with this exact structure:
 {{

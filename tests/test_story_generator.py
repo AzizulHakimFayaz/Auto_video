@@ -60,13 +60,29 @@ def test_extract_json_handles_markdown_code_fences_and_think_tags() -> None:
 
 def test_extract_json_rejects_malformed_json() -> None:
     with pytest.raises(StoryValidationError, match="Malformed JSON"):
-        extract_json_from_text("```json\n{\"title\": \"Broken\", }\n```")
+        extract_json_from_text('```json\n{"title": :::: invalid}\n```')
 
     with pytest.raises(StoryValidationError, match="No JSON object"):
         extract_json_from_text("Plain text with no braces at all")
 
     with pytest.raises(StoryValidationError, match="empty response"):
         extract_json_from_text("   ")
+
+
+def test_extract_json_auto_repairs_minor_llm_syntax_errors() -> None:
+    # Trailing commas and missing property commas
+    raw = '''{
+      "title": \u201cAuto Repaired\u201d
+      "language": "English",
+      "story": "A dramatic story.",
+      "scenes": [
+        {"narration": "Scene 1", "pause_after": 1.0},
+      ],
+    }'''
+    parsed = extract_json_from_text(raw)
+    assert parsed["title"] == "Auto Repaired"
+    assert parsed["language"] == "English"
+    assert len(parsed["scenes"]) == 1
 
 
 def test_validate_story_payload_accepts_valid_story() -> None:
@@ -83,6 +99,13 @@ def test_validate_story_payload_rejects_out_of_bounds_word_count() -> None:
     raw["scenes"][0]["narration"] = "Too short story."
     with pytest.raises(StoryValidationError, match="word count"):
         validate_story_payload(raw, min_words=100, max_words=130)
+
+
+def test_validate_story_payload_word_count_tolerance() -> None:
+    raw = _sample_valid_story_dict()
+    # sample_story.json has 128 words. If min_words is 135, a 128-word story is within the tolerance window
+    validated = validate_story_payload(raw, min_words=135, max_words=160)
+    assert validated.word_count == 128
 
 
 def test_validate_story_payload_rejects_scene_narration_mismatch() -> None:
