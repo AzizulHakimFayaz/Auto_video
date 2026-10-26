@@ -57,6 +57,23 @@ def test_extract_json_handles_markdown_code_fences_and_think_tags() -> None:
     assert parsed["title"] == payload["title"]
     assert len(parsed["scenes"]) == 6
 
+    # Also test orphan </think> tag and reasoning containing curly braces before the JSON object
+    orphan_think = (
+        'We need to produce a JSON object starting with { and ending with }.\n'
+        '</think>\n'
+        f'{json.dumps(payload, indent=2)}'
+    )
+    parsed_orphan = extract_json_from_text(orphan_think)
+    assert parsed_orphan["title"] == payload["title"]
+
+    # Also test unclosed <think> tag where JSON is emitted without closing tag
+    unclosed_think = (
+        '<think>We need to produce a JSON object starting with { and ending with }.\n'
+        f'{json.dumps(payload, indent=2)}'
+    )
+    parsed_unclosed = extract_json_from_text(unclosed_think)
+    assert parsed_unclosed["title"] == payload["title"]
+
 
 def test_extract_json_rejects_malformed_json() -> None:
     with pytest.raises(StoryValidationError, match="Malformed JSON"):

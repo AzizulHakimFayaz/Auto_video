@@ -131,7 +131,7 @@ class AppConfig:
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     openrouter_fallback_model: str = "openrouter/free"
-    openrouter_timeout_seconds: int = 90
+    openrouter_timeout_seconds: int = 120
     openrouter_max_retries: int = 3
 
     # Story configuration
@@ -267,7 +267,7 @@ class AppConfig:
             ).strip()
             or "openrouter/free",
             openrouter_timeout_seconds=_parse_int(
-                os.getenv("OPENROUTER_TIMEOUT_SECONDS"), 90
+                os.getenv("OPENROUTER_TIMEOUT_SECONDS"), 120
             ),
             openrouter_max_retries=_parse_int(os.getenv("OPENROUTER_MAX_RETRIES"), 3),
             story_language=os.getenv("STORY_LANGUAGE", "English").strip() or "English",

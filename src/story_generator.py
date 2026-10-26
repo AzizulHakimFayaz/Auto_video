@@ -152,7 +152,6 @@ class _ChatCompletionsNamespace:
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "reasoning": {"exclude": True, "effort": "low"},
         }
         if "response_format" in kwargs and kwargs["response_format"]:
             payload["response_format"] = kwargs["response_format"]
@@ -161,12 +160,6 @@ class _ChatCompletionsNamespace:
             response = requests.post(
                 url, headers=headers, json=payload, timeout=self.timeout
             )
-            # If provider rejects reasoning parameters (400 Bad Request), retry without them
-            if response.status_code == 400 and "reasoning" in response.text.lower():
-                payload.pop("reasoning", None)
-                response = requests.post(
-                    url, headers=headers, json=payload, timeout=self.timeout
-                )
         except requests.Timeout as exc:
             raise StoryAPIError(
                 f"OpenRouter request timed out after {self.timeout}s.",
@@ -262,6 +255,15 @@ class _ChatCompletionsNamespace:
 
         message_obj = choices[0].get("message", {})
         content = message_obj.get("content") or ""
+        reasoning = (
+            message_obj.get("reasoning")
+            or message_obj.get("reasoning_content")
+            or ""
+        )
+        if not content.strip() and reasoning:
+            content = reasoning
+        elif reasoning and "{" not in content and "{" in reasoning:
+            content = f"{reasoning}\n{content}"
         return _CompletionResponse(content=content, model=body.get("model", model))
 
 
@@ -442,9 +444,19 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
 
     cleaned = raw_text.strip()
 
-    # Strip complete and unclosed <think>...</think> blocks emitted by reasoning models
-    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL).strip()
+    # Strip complete <think>...</think> blocks emitted by reasoning models
+    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+
+    # Strip orphan </think> blocks (e.g. when vLLM injects <think> in the prompt template)
+    if "</think>" in cleaned:
+        after_think = cleaned.split("</think>")[-1].strip()
+        if after_think:
+            cleaned = after_think
+        else:
+            cleaned = cleaned.replace("</think>", "").strip()
+
+    # Remove any stray opening <think> tag without deleting content after it
+    cleaned = cleaned.replace("<think>", "").strip()
 
     # Check for ```json ... ``` or ``` ... ``` fenced code block (greedy to capture outermost braces)
     fence_match = re.search(
@@ -453,8 +465,14 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
     if fence_match:
         candidate = fence_match.group(1).strip()
     else:
-        # Locate outermost JSON object braces
-        first_brace = cleaned.find("{")
+        # Prefer the start of our JSON schema object so any '{' inside reasoning text is skipped
+        schema_matches = list(
+            re.finditer(
+                r'\{\s*"(?:title|language|protagonist|setting|theme|story|mood|scenes)"\s*:',
+                cleaned,
+            )
+        )
+        first_brace = schema_matches[-1].start() if schema_matches else cleaned.find("{")
         last_brace = cleaned.rfind("}")
         if first_brace == -1 or last_brace == -1 or last_brace <= first_brace:
             salvaged = extract_fields_fallback(cleaned)
@@ -680,12 +698,32 @@ def validate_story_payload(
 
     # Validate word count of full story (ignoring pause tags)
     total_words = count_words(story_text)
-    # Allow a reasonable tolerance window so minor variations (e.g. 149 words against 150)
+    clean_story = strip_pause_markers(story_text)
+    combined_scene_text = " ".join(strip_pause_markers(s.narration) for s in scenes)
+    scene_words = count_words(combined_scene_text)
+    alignment_score = compute_story_similarity(clean_story, combined_scene_text)
+
+    # Allow a reasonable tolerance window so minor variations (e.g. 130-149 words against 150)
     # don't fail an otherwise high quality generation, while still ensuring a 1+ minute video.
-    under_tolerance = min(30, max(5, int(min_words * 0.15)))
-    over_tolerance = min(35, max(10, int(max_words * 0.20)))
-    effective_min = max(90, min_words - under_tolerance)
+    under_tolerance = max(35, int(min_words * 0.25))
+    over_tolerance = max(60, int(max_words * 0.35))
+    effective_min = max(85, min_words - under_tolerance)
     effective_max = max_words + over_tolerance
+
+    # If the model wrote slightly different lengths in 'story' vs 'scenes' (but same story), sync 'story' from scenes
+    if (
+        alignment_score >= 0.45
+        and (
+            alignment_score < 0.78
+            or abs(scene_words - total_words) > max(20, int(total_words * 0.18))
+            or total_words < effective_min
+            or total_words > effective_max
+        )
+        and effective_min <= scene_words <= effective_max
+    ):
+        story_text = " ".join(s.narration for s in scenes)
+        total_words = scene_words
+        alignment_score = 1.0
 
     if total_words < effective_min or total_words > effective_max:
         raise StoryValidationError(
@@ -693,11 +731,6 @@ def validate_story_payload(
             f"[{effective_min}, {effective_max}] (target was {min_words}-{max_words})."
         )
 
-    # Validate that scene narrations correspond to and cover the complete story text
-    clean_story = strip_pause_markers(story_text)
-    combined_scene_text = " ".join(strip_pause_markers(s.narration) for s in scenes)
-    scene_words = count_words(combined_scene_text)
-    alignment_score = compute_story_similarity(clean_story, combined_scene_text)
     if alignment_score < 0.78 or abs(scene_words - total_words) > max(20, int(total_words * 0.18)):
         raise StoryValidationError(
             f"Scene narrations do not accurately cover the story text "
@@ -779,91 +812,41 @@ class StoryGenerator:
             )
 
         system_prompt = (
+            "detailed thinking off\n"
             "You are a master drama and emotional relationship storyteller specializing in viral vertical video scripts. "
             "Write gripping, realistic fictional stories centered on betrayal, cheating, hidden secrets, heartbreak, and karma. "
-            "Deliver intense emotional suspense, shocking discoveries, human vulnerability, and unforgettable closure. "
-            "Never copy existing IP or famous celebrities. "
-            "CRITICAL: Do NOT output any thinking process, reasoning, internal monologue, or markdown chatter. "
-            "Start your output directly with the opening curly brace '{' and respond ONLY with the single raw valid JSON object ending with '}'."
+            "Keep any internal planning under 2 sentences—do NOT count words one-by-one in your scratchpad. "
+            "Respond ONLY with a single raw valid JSON object starting with '{' and ending with '}'."
         )
 
-        user_prompt = f"""Create a gripping emotional drama short story in {lang} centered on "{theme}" (variation #{attempt}).
+        user_prompt = f"""Create an original emotional drama short story in {lang} centered on "{theme}" (variation #{attempt}).
 
-Dramatic & Video Pacing Requirements:
-1. Opening Hook: The first sentence MUST immediately seize the audience with a revelation, an alarming text message, an unexpected discovery, or a confrontation.
-2. Narrative Arc: High stakes emotional conflict. Build the tension piece by piece as the truth comes to light.
-3. Turning Point: An intense confrontation or moment of quiet realization where the protagonist takes back their dignity or walks away.
-4. Video Length (1 minute or more): The complete "story" field MUST be between {min_w} and {max_w} words.
-5. Dramatic Pauses: Insert [pause: 0.8s] or [pause: 1.2s] at 2 to 4 crucial moments of shock or suspense in the narration (e.g. "I checked the name on the second phone. [pause: 1.0s] It was my best friend.").
-6. Scene breakdown: Split the story into {min_s} to {max_s} chronological scenes.
-   Each scene must include:
-   - "narration": The spoken text for this scene (including any [pause: Xs] markers). Concatenating all scene narrations in order must equal the complete story text.
-   - "pause_after": Float between 0.6 and 1.5 seconds representing the dramatic silence after this scene before transitioning.
-   - "image_query": 3 to 6 descriptive English keywords for atmospheric vertical imagery (e.g. phone lock screen late night, crying woman rain window, empty dining table candlelight).
-   - "visual_mood": One of: betrayal, heartbreak, tension, dark, sadness, drama.
-7. Background Music Direction:
-   - "music_style": Detailed description of the desired background music (e.g. "tense emotional dark cello and sad piano with rising dramatic suspense").
-   - "music_mood": One of: betrayal, heartbreak, suspense, drama, sad.
-8. JSON Formatting Requirements:
-   - Output valid JSON only, starting with {{ and ending with }}.
-   - When quoting dialogue inside narration strings, ALWAYS use single quotes (e.g. He whispered, 'Why did you do it?') to prevent broken JSON syntax.
-   - Separate all properties and array items with commas. Never leave trailing commas.{avoid_clause}{feedback_clause}
+Requirements:
+1. Opening Hook: Start immediately with a shocking discovery, text message, or confrontation.
+2. Length: Approximately {min_w} to {max_w} words total (~60 seconds spoken), split across {min_s} to {max_s} chronological scenes.
+3. Dramatic Pauses: Include [pause: 0.8s] or [pause: 1.0s] at 2-3 suspenseful moments inside the narration, and set "pause_after" (0.8 to 1.4) on each scene.
+4. Use single quotes for any dialogue inside strings (e.g. 'Who is she?') so the JSON stays valid.{avoid_clause}{feedback_clause}
 
-Return ONLY valid JSON with this exact structure:
+Return ONLY valid JSON with this structure:
 {{
-  "title": "Short dramatic title (e.g. The Second Key, Messages at 2 AM)",
+  "title": "Short dramatic title",
   "language": "{lang}",
   "protagonist": "Brief protagonist description",
   "setting": "Brief setting description",
   "theme": "{theme}",
-  "story": "The complete narration text with [pause: Xs] markers ({min_w}-{max_w} words)...",
-  "mood": "betrayal and heartbreak",
+  "story": "Complete story text combining all scenes ({min_w}-{max_w} words)...",
+  "mood": "betrayal",
   "music_style": "tense emotional dark cello and sad piano with rising dramatic suspense",
   "music_mood": "betrayal",
-  "caption": "A dramatic viral caption ending with a question for viewers...",
-  "hashtags": ["#betrayal", "#cheating", "#storytime", "#drama", "#heartbreak", "#relationship"],
+  "caption": "Viral caption ending with a question for viewers...",
+  "hashtags": ["#betrayal", "#cheating", "#storytime", "#drama", "#heartbreak", "#shorts"],
   "scenes": [
     {{
-      "narration": "First scene narration text with optional [pause: 0.8s]...",
+      "narration": "Scene 1 narration with optional [pause: 0.8s]...",
       "pause_after": 1.0,
-      "image_query": "unlocked smartphone notifications dark bedroom",
+      "image_query": "unlocked smartphone notification dark bedroom",
       "visual_mood": "betrayal",
       "duration_hint_seconds": 12
-    }},
-    {{
-      "narration": "Second scene narration text...",
-      "pause_after": 1.0,
-      "image_query": "shocked person looking at messages in disbelief",
-      "visual_mood": "betrayal",
-      "duration_hint_seconds": 12
-    }},
-    {{
-      "narration": "Third scene narration text with optional [pause: 1.0s]...",
-      "pause_after": 1.0,
-      "image_query": "secret messages and photos glowing screen",
-      "visual_mood": "betrayal",
-      "duration_hint_seconds": 12
-    }},
-    {{
-      "narration": "Fourth scene narration text...",
-      "pause_after": 1.0,
-      "image_query": "silent tears crying betrayal heartbreak shadow",
-      "visual_mood": "heartbreak",
-      "duration_hint_seconds": 12
-    }},
-    {{
-      "narration": "Fifth scene narration text with confrontation or quiet departure...",
-      "pause_after": 1.2,
-      "image_query": "wedding ring left on kitchen table beside keys note",
-      "visual_mood": "drama",
-      "duration_hint_seconds": 14
-    }},
-    {{
-      "narration": "Sixth scene final closing words and realization...",
-      "pause_after": 1.5,
-      "image_query": "sunrise over empty road dignity closure",
-      "visual_mood": "heartbreak",
-      "duration_hint_seconds": 10
     }}
   ]
 }}"""
@@ -921,7 +904,7 @@ Return ONLY valid JSON with this exact structure:
                         model=model_id,
                         messages=messages,
                         temperature=temperature,
-                        max_tokens=4000,
+                        max_tokens=16000,
                     )
                     raw_content = (
                         completion.choices[0].message.content
