@@ -108,6 +108,23 @@ def test_validate_story_payload_word_count_tolerance() -> None:
     assert validated.word_count == 128
 
 
+def test_validate_story_payload_auto_splits_single_scene() -> None:
+    raw = _sample_valid_story_dict()
+    # Collapse all narration into 1 single scene (as Nemotron sometimes did)
+    raw["scenes"] = [
+        {
+            "narration": raw["story"],
+            "pause_after": 1.0,
+            "image_query": "emotional dramatic scene",
+            "visual_mood": "betrayal",
+            "duration_hint_seconds": 60,
+        }
+    ]
+    validated = validate_story_payload(raw, min_words=100, max_words=140, min_scenes=5)
+    assert len(validated.scenes) >= 5
+    assert validated.word_count == 128
+
+
 def test_validate_story_payload_rejects_scene_narration_mismatch() -> None:
     raw = _sample_valid_story_dict()
     for scene in raw["scenes"]:

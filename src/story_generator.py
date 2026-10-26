@@ -152,6 +152,7 @@ class _ChatCompletionsNamespace:
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "reasoning": {"exclude": True, "effort": "low"},
         }
         if "response_format" in kwargs and kwargs["response_format"]:
             payload["response_format"] = kwargs["response_format"]
@@ -160,6 +161,12 @@ class _ChatCompletionsNamespace:
             response = requests.post(
                 url, headers=headers, json=payload, timeout=self.timeout
             )
+            # If provider rejects reasoning parameters (400 Bad Request), retry without them
+            if response.status_code == 400 and "reasoning" in response.text.lower():
+                payload.pop("reasoning", None)
+                response = requests.post(
+                    url, headers=headers, json=payload, timeout=self.timeout
+                )
         except requests.Timeout as exc:
             raise StoryAPIError(
                 f"OpenRouter request timed out after {self.timeout}s.",
@@ -505,6 +512,62 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
     raise StoryValidationError("Top-level JSON value must be an object.")
 
 
+def ensure_minimum_scenes(
+    raw_scenes: List[Dict[str, Any]],
+    story_text: str,
+    min_scenes: int = 5,
+) -> List[Dict[str, Any]]:
+    """Partition narrative into at least `min_scenes` if the model produced fewer scenes."""
+    if len(raw_scenes) >= min_scenes:
+        return raw_scenes
+
+    base_text = (
+        " ".join(str(s.get("narration", "")) for s in raw_scenes).strip()
+        or story_text.strip()
+    )
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", base_text) if s.strip()]
+    if len(sentences) < min_scenes:
+        words = base_text.split()
+        chunk_size = max(1, len(words) // min_scenes)
+        sentences = [
+            " ".join(
+                words[i * chunk_size : (i + 1) * chunk_size if i < min_scenes - 1 else None]
+            )
+            for i in range(min_scenes)
+        ]
+
+    step = len(sentences) / float(min_scenes)
+    new_scenes: List[Dict[str, Any]] = []
+    sample_queries = [
+        "unlocked phone nightstand notification dark bedroom",
+        "shocked face discovery secret messages betrayal",
+        "confrontation couple late night living room",
+        "crying alone looking out rainy window heartbreak",
+        "walking away packed suitcase empty street closure",
+        "quiet realization emotional betrayal closure",
+    ]
+    sample_moods = ["betrayal", "shock", "drama", "heartbreak", "sadness", "closure"]
+
+    for i in range(min_scenes):
+        start_idx = int(round(i * step))
+        end_idx = int(round((i + 1) * step))
+        chunk_sentences = sentences[start_idx:end_idx]
+        chunk_text = " ".join(chunk_sentences).strip()
+        if not chunk_text and new_scenes:
+            continue
+        new_scenes.append(
+            {
+                "narration": chunk_text,
+                "pause_after": 1.0,
+                "image_query": sample_queries[i % len(sample_queries)],
+                "visual_mood": sample_moods[i % len(sample_moods)],
+                "duration_hint_seconds": max(4.0, len(chunk_text.split()) / 2.2),
+            }
+        )
+
+    return new_scenes if len(new_scenes) >= min_scenes else raw_scenes
+
+
 def validate_story_payload(
     raw_dict: Dict[str, Any],
     min_words: int = 100,
@@ -557,10 +620,18 @@ def validate_story_payload(
         raise StoryValidationError("At least one valid hashtag is required.")
 
     raw_scenes = raw_dict.get("scenes")
-    if not isinstance(raw_scenes, list) or len(raw_scenes) < min_scenes:
+    if not isinstance(raw_scenes, list) or not raw_scenes:
+        raise StoryValidationError("Field 'scenes' must be a non-empty list of scene objects.")
+
+    if len(raw_scenes) < min_scenes:
+        raw_scenes = ensure_minimum_scenes(
+            raw_scenes, story_text=story_text, min_scenes=min_scenes
+        )
+
+    if len(raw_scenes) < min_scenes:
         raise StoryValidationError(
             f"Field 'scenes' must contain at least {min_scenes} scene objects "
-            f"(got {len(raw_scenes) if isinstance(raw_scenes, list) else 0})."
+            f"(got {len(raw_scenes)})."
         )
     if len(raw_scenes) > max_scenes:
         raise StoryValidationError(
@@ -758,6 +829,41 @@ Return ONLY valid JSON with this exact structure:
       "image_query": "unlocked smartphone notifications dark bedroom",
       "visual_mood": "betrayal",
       "duration_hint_seconds": 12
+    }},
+    {{
+      "narration": "Second scene narration text...",
+      "pause_after": 1.0,
+      "image_query": "shocked person looking at messages in disbelief",
+      "visual_mood": "betrayal",
+      "duration_hint_seconds": 12
+    }},
+    {{
+      "narration": "Third scene narration text with optional [pause: 1.0s]...",
+      "pause_after": 1.0,
+      "image_query": "secret messages and photos glowing screen",
+      "visual_mood": "betrayal",
+      "duration_hint_seconds": 12
+    }},
+    {{
+      "narration": "Fourth scene narration text...",
+      "pause_after": 1.0,
+      "image_query": "silent tears crying betrayal heartbreak shadow",
+      "visual_mood": "heartbreak",
+      "duration_hint_seconds": 12
+    }},
+    {{
+      "narration": "Fifth scene narration text with confrontation or quiet departure...",
+      "pause_after": 1.2,
+      "image_query": "wedding ring left on kitchen table beside keys note",
+      "visual_mood": "drama",
+      "duration_hint_seconds": 14
+    }},
+    {{
+      "narration": "Sixth scene final closing words and realization...",
+      "pause_after": 1.5,
+      "image_query": "sunrise over empty road dignity closure",
+      "visual_mood": "heartbreak",
+      "duration_hint_seconds": 10
     }}
   ]
 }}"""
@@ -816,7 +922,6 @@ Return ONLY valid JSON with this exact structure:
                         messages=messages,
                         temperature=temperature,
                         max_tokens=4000,
-                        response_format={"type": "json_object"},
                     )
                     raw_content = (
                         completion.choices[0].message.content
