@@ -11,7 +11,7 @@ google-auth==2.47.0
 google-auth-oauthlib==1.2.4
 
 # Local Text-to-Speech (Piper TTS CLI + ONNX runtime)
-piper-tts==1.2.0
+piper-tts==1.8.0
 onnxruntime>=1.18.0
 
 # Automated test suite
