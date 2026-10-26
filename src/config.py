@@ -103,6 +103,16 @@ class SecretRedactingFilter(logging.Filter):
         return True
 
 
+def is_free_model_identifier(model_name: str) -> bool:
+    """Return True if model_name represents a verified zero-cost free endpoint."""
+    cleaned = (model_name or "").strip().lower()
+    return (
+        cleaned.endswith(":free")
+        or cleaned.endswith("/free")
+        or cleaned == "openrouter/free"
+    )
+
+
 @dataclass
 class AppConfig:
     """Single source of truth for application settings and credentials."""
@@ -119,8 +129,8 @@ class AppConfig:
     # OpenRouter / AI Story Generation (Strictly Free Models Only)
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
-    openrouter_fallback_model: str = ""
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    openrouter_fallback_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free"
     openrouter_timeout_seconds: int = 60
     openrouter_max_retries: int = 3
 
@@ -246,9 +256,13 @@ class AppConfig:
                 "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
             ).strip(),
             openrouter_model=os.getenv(
-                "OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
+                "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+            ).strip()
+            or "meta-llama/llama-3.3-70b-instruct:free",
+            openrouter_fallback_model=os.getenv(
+                "OPENROUTER_FALLBACK_MODEL",
+                "nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free",
             ).strip(),
-            openrouter_fallback_model=os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip(),
             openrouter_timeout_seconds=_parse_int(
                 os.getenv("OPENROUTER_TIMEOUT_SECONDS"), 60
             ),
@@ -355,17 +369,20 @@ class AppConfig:
         if self.video_width <= 0 or self.video_height <= 0 or self.video_fps <= 0:
             raise ConfigurationError("Video dimensions and FPS must be positive integers.")
 
-        # Enforce zero-cost policy: OpenRouter models must be explicit :free routes
-        if not self.openrouter_model.endswith(":free"):
+        # Enforce zero-cost policy: OpenRouter models must be explicit :free / free routes
+        if not is_free_model_identifier(self.openrouter_model):
             raise ConfigurationError(
                 f"Zero-budget safeguard violation: OPENROUTER_MODEL ({self.openrouter_model!r}) "
                 "must use an explicit ':free' endpoint suffix. Paid models are strictly prohibited."
             )
-        if self.openrouter_fallback_model and not self.openrouter_fallback_model.endswith(":free"):
-            raise ConfigurationError(
-                f"Zero-budget safeguard violation: OPENROUTER_FALLBACK_MODEL "
-                f"({self.openrouter_fallback_model!r}) must use an explicit ':free' endpoint suffix."
-            )
+        if self.openrouter_fallback_model:
+            for fallback in self.openrouter_fallback_model.split(","):
+                fallback = fallback.strip()
+                if fallback and not is_free_model_identifier(fallback):
+                    raise ConfigurationError(
+                        f"Zero-budget safeguard violation: OPENROUTER_FALLBACK_MODEL "
+                        f"({fallback!r}) must use an explicit ':free' endpoint suffix."
+                    )
 
         if require_api_key and not self.openrouter_api_key:
             raise ConfigurationError(

@@ -129,7 +129,7 @@ def test_story_generator_uses_configured_free_fallback_model(tmp_path: Path) -> 
     cfg = AppConfig(
         openrouter_api_key="sk-or-v1-secretkey123456",
         openrouter_model="nvidia/nemotron-3-ultra-550b-a55b:free",
-        openrouter_fallback_model="meta-llama/llama-3.3-70b-instruct:free",
+        openrouter_fallback_model="meta-llama/llama-3.3-70b-instruct:free,openrouter/free",
         openrouter_max_retries=2,
         history_file=tmp_path / "history.json",
     )

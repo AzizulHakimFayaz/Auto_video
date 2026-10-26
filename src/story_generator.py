@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
-from src.config import AppConfig, ConfigurationError
+from src.config import AppConfig, ConfigurationError, is_free_model_identifier
 from src.history_manager import HistoryManager, compute_story_similarity
 
 logger = logging.getLogger(__name__)
@@ -299,18 +299,19 @@ def count_words(text: str) -> int:
 
 
 def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
-    """Extract and parse a JSON object from raw LLM output, stripping Markdown fences."""
+    """Extract and parse a JSON object from raw LLM output, stripping Markdown fences and reasoning."""
     if not raw_text or not raw_text.strip():
         raise StoryValidationError("Model returned an empty response.")
 
     cleaned = raw_text.strip()
 
-    # Strip <think>...</think> blocks if emitted by reasoning models
-    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+    # Strip complete and unclosed <think>...</think> blocks emitted by reasoning models
+    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL).strip()
 
-    # Check for ```json ... ``` or ``` ... ``` fenced code block
+    # Check for ```json ... ``` or ``` ... ``` fenced code block (greedy to capture outermost braces)
     fence_match = re.search(
-        r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE
+        r"```(?:json)?\s*(\{.*\})\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE
     )
     if fence_match:
         candidate = fence_match.group(1).strip()
@@ -319,7 +320,10 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
         first_brace = cleaned.find("{")
         last_brace = cleaned.rfind("}")
         if first_brace == -1 or last_brace == -1 or last_brace <= first_brace:
-            raise StoryValidationError("No JSON object found in model output.")
+            snippet = cleaned[:250].replace("\n", " ")
+            raise StoryValidationError(
+                f"No JSON object found in model output. Model returned: {snippet!r}"
+            )
         candidate = cleaned[first_brace : last_brace + 1]
 
     try:
@@ -516,7 +520,8 @@ class StoryGenerator:
             "Write completely original, deeply moving fictional stories with human warmth. "
             "Never copy existing stories, famous IP, or recognizable characters. "
             "Never present sensational misinformation or fake real-world news claims as facts. "
-            "Respond ONLY with a single valid JSON object matching the requested schema."
+            "CRITICAL: Do NOT output any thinking process, reasoning, internal monologue, or markdown chatter. "
+            "Respond ONLY with a single raw valid JSON object starting with '{' and ending with '}'."
         )
 
         user_prompt = f"""Create an original emotional short story in {lang} centered on the theme of "{theme}" (variation #{attempt}).
@@ -560,12 +565,15 @@ Return ONLY valid JSON with this exact structure:
         """Generate and validate a unique emotional story using configured free model(s)."""
         self.config.validate_core_settings(require_api_key=True)
 
-        models_to_try = [self.config.openrouter_model]
-        if (
-            self.config.openrouter_fallback_model
-            and self.config.openrouter_fallback_model != self.config.openrouter_model
-        ):
-            models_to_try.append(self.config.openrouter_fallback_model)
+        models_to_try: List[str] = []
+        if self.config.openrouter_model:
+            models_to_try.append(self.config.openrouter_model)
+
+        if self.config.openrouter_fallback_model:
+            for fallback in self.config.openrouter_fallback_model.split(","):
+                fallback = fallback.strip()
+                if fallback and fallback not in models_to_try:
+                    models_to_try.append(fallback)
 
         excluded_titles: List[str] = []
         if self.history_manager is not None:
@@ -574,9 +582,9 @@ Return ONLY valid JSON with this exact structure:
         last_error: Optional[Exception] = None
 
         for model_id in models_to_try:
-            if not model_id.endswith(":free"):
+            if not is_free_model_identifier(model_id):
                 raise ConfigurationError(
-                    f"Refusing to call non-free model {model_id!r}. Only ':free' models are permitted."
+                    f"Refusing to call non-free model {model_id!r}. Only free endpoints are permitted."
                 )
 
             logger.info("Starting story generation using OpenRouter model: %s", model_id)
@@ -601,7 +609,7 @@ Return ONLY valid JSON with this exact structure:
                         model=model_id,
                         messages=messages,
                         temperature=temperature,
-                        max_tokens=1600,
+                        max_tokens=3500,
                     )
                     raw_content = (
                         completion.choices[0].message.content
