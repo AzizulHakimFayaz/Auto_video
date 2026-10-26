@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "tracks": {
+    "sad_piano_ambient.wav": {
+      "title": "Quiet Rain Reflections",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/sad_piano_ambient.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'Quiet Rain Reflections' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "sad",
+        "sadness",
+        "melancholic",
+        "melancholy",
+        "lonely",
+        "piano"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
+    "hopeful_dawn_chords.wav": {
+      "title": "First Light of Tomorrow",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/hopeful_dawn_chords.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'First Light of Tomorrow' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "hopeful",
+        "hope",
+        "uplifting",
+        "inspiring",
+        "sunrise"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
+    "romantic_warm_pad.wav": {
+      "title": "Warmth Under the Shelter",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/romantic_warm_pad.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'Warmth Under the Shelter' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "romantic",
+        "love",
+        "warm",
+        "kindness",
+        "family",
+        "heartfelt"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
+    "suspense_atmosphere.wav": {
+      "title": "Distant Thunder Horizon",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/suspense_atmosphere.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'Distant Thunder Horizon' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "suspenseful",
+        "suspense",
+        "tense",
+        "tragedy",
+        "atmospheric"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    },
+    "peaceful_breeze_ambient.wav": {
+      "title": "Still Water Sanctuary",
+      "creator": "Auto Story Video Acoustic Synth",
+      "source_url": "local://assets/music/peaceful_breeze_ambient.wav",
+      "license_name": "CC0 1.0 Universal (Public Domain Dedication)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_instructions": "'Still Water Sanctuary' synthesized locally under CC0 1.0 Public Domain.",
+      "commercial_use_allowed": true,
+      "mood_tags": [
+        "peaceful",
+        "peace",
+        "calm",
+        "ambient",
+        "gentle",
+        "nature"
+      ],
+      "restrictions": "None (CC0 Public Domain)"
+    }
+  }
+}

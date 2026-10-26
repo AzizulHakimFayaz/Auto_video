@@ -1,0 +1,38 @@
+# Environment and Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*client_secret*.json
+*oauth_token*.json
+
+# Python bytecode and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Downloaded Piper TTS voice models (large binary weights)
+models/
+*.onnx
+
+# Generated videos, temporary audio, and runtime outputs
+output/
+tmp/
+temp/
+*.mp4
+*.mov
+*.part
+assets/licenses/selected_images_attribution.json
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,56 @@
+{
+  "title": "The Last Umbrella on Platform Four",
+  "language": "English",
+  "protagonist": "Aris, a retired stationmaster with a weathered coat",
+  "setting": "A rain-soaked commuter train platform at dusk",
+  "theme": "unexpected generosity",
+  "story": "Every evening at six, retired stationmaster Aris stood beneath the leaking roof of Platform Four, holding a bright yellow umbrella he never opened for himself. Years ago, his daughter missed the last train home in a winter storm, and a stranger had given her his warm coat. Since she moved abroad, Aris kept that quiet debt alive. Tonight, the downpour was merciless. A soaking-wet university student sat trembling on a wooden bench, clutching a ruined portfolio of architectural drawings. Aris walked over, opened the yellow umbrella above her head, and placed a warm thermos of tea beside her bag. Looking up through tears, she whispered that she had failed her final jury. Aris smiled gently toward the arriving train. One storm never ruins the whole blueprint, he said.",
+  "mood": "sad then hopeful",
+  "caption": "One small act of kindness can shelter someone when their whole world feels like it is pouring down.",
+  "hashtags": [
+    "#shortstory",
+    "#emotionalstory",
+    "#kindness",
+    "#hope",
+    "#humanity",
+    "#storytime"
+  ],
+  "scenes": [
+    {
+      "narration": "Every evening at six, retired stationmaster Aris stood beneath the leaking roof of Platform Four, holding a bright yellow umbrella he never opened for himself.",
+      "image_query": "rainy train station platform evening lonely man umbrella",
+      "visual_mood": "sadness",
+      "duration_hint_seconds": 8.5
+    },
+    {
+      "narration": "Years ago, his daughter missed the last train home in a winter storm, and a stranger had given her his warm coat. Since she moved abroad, Aris kept that quiet debt alive.",
+      "image_query": "winter train tracks nostalgic memory family warmth",
+      "visual_mood": "family",
+      "duration_hint_seconds": 9.5
+    },
+    {
+      "narration": "Tonight, the downpour was merciless. A soaking-wet university student sat trembling on a wooden bench, clutching a ruined portfolio of architectural drawings.",
+      "image_query": "heavy rain bench city night sad person wet",
+      "visual_mood": "tragedy",
+      "duration_hint_seconds": 8.5
+    },
+    {
+      "narration": "Aris walked over, opened the yellow umbrella above her head, and placed a warm thermos of tea beside her bag.",
+      "image_query": "sharing yellow umbrella in rain kindness warm light",
+      "visual_mood": "love",
+      "duration_hint_seconds": 7.0
+    },
+    {
+      "narration": "Looking up through tears, she whispered that she had failed her final jury.",
+      "image_query": "rainy window reflection emotional conversation dusk",
+      "visual_mood": "sadness",
+      "duration_hint_seconds": 5.5
+    },
+    {
+      "narration": "Aris smiled gently toward the arriving train. One storm never ruins the whole blueprint, he said.",
+      "image_query": "train headlights glowing through rain hopeful sunrise",
+      "visual_mood": "hope",
+      "duration_hint_seconds": 6.5
+    }
+  ]
+}

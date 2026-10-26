@@ -1,0 +1,160 @@
+name: Daily Emotional Story Video Pipeline
+
+on:
+  schedule:
+    # 03:00 UTC = 09:00 AM Bangladesh Standard Time (BST, UTC+6)
+    # Note: GitHub Actions scheduled workflows may experience slight queue delays during peak hours.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in dry-run mode (true = render & validate MP4 without live publishing)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      production_date:
+        description: "Optional production date override (YYYY-MM-DD)"
+        required: false
+        default: ""
+        type: string
+      retry_publish:
+        description: "Retry publishing only for an existing run date"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+# Restrict GITHUB_TOKEN permissions to the absolute minimum required
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-story-video-production
+  cancel-in-progress: false
+
+jobs:
+  produce-and-publish:
+    name: Generate & Publish Daily Story Video
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install FFmpeg and system audio dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng libsndfile1
+
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Cache Piper TTS voice model (en_US-ljspeech-medium, Public Domain)
+        id: cache-piper-voice
+        uses: actions/cache@v4
+        with:
+          path: models/piper
+          key: piper-voice-en_US-ljspeech-medium-v1
+
+      - name: Download verified Piper voice model if not cached
+        if: steps.cache-piper-voice.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p models/piper
+          HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium"
+          curl --fail --location --silent --show-error --retry 3 \
+            "${HF_BASE}/en_US-ljspeech-medium.onnx" \
+            -o "models/piper/en_US-ljspeech-medium.onnx"
+          curl --fail --location --silent --show-error --retry 3 \
+            "${HF_BASE}/en_US-ljspeech-medium.onnx.json" \
+            -o "models/piper/en_US-ljspeech-medium.onnx.json"
+          ls -lh models/piper/
+
+      - name: Restore production run history cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/history.json
+          key: story-history-${{ github.run_id }}
+          restore-keys: |
+            story-history-
+
+      - name: Bootstrap local CC0 fallback images, ambient tracks, and manifests
+        run: |
+          python -m src.asset_bootstrap
+
+      - name: Run daily story video pipeline
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free' }}
+          OPENROUTER_FALLBACK_MODEL: ${{ vars.OPENROUTER_FALLBACK_MODEL || '' }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          OPENVERSE_ENABLED: ${{ vars.OPENVERSE_ENABLED || 'false' }}
+          STORY_LANGUAGE: ${{ vars.STORY_LANGUAGE || 'English' }}
+          STORY_MIN_WORDS: ${{ vars.STORY_MIN_WORDS || '100' }}
+          STORY_MAX_WORDS: ${{ vars.STORY_MAX_WORDS || '130' }}
+          PIPER_EXECUTABLE: "piper"
+          PIPER_VOICE: "en_US-ljspeech-medium"
+          PIPER_MODEL_PATH: "models/piper/en_US-ljspeech-medium.onnx"
+          PIPER_CONFIG_PATH: "models/piper/en_US-ljspeech-medium.onnx.json"
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || vars.DRY_RUN || 'true' }}
+          ENABLE_YOUTUBE: ${{ vars.ENABLE_YOUTUBE || 'false' }}
+          ENABLE_INSTAGRAM: ${{ vars.ENABLE_INSTAGRAM || 'false' }}
+          ENABLE_FACEBOOK: ${{ vars.ENABLE_FACEBOOK || 'false' }}
+          ENABLE_TIKTOK: ${{ vars.ENABLE_TIKTOK || 'false' }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          YOUTUBE_PRIVACY_STATUS: ${{ vars.YOUTUBE_PRIVACY_STATUS || 'private' }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_VIDEO_PUBLIC_URL_BASE: ${{ vars.INSTAGRAM_VIDEO_PUBLIC_URL_BASE || '' }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_PRIVACY_LEVEL: ${{ vars.TIKTOK_PRIVACY_LEVEL || 'SELF_ONLY' }}
+        run: |
+          ARGS=()
+          if [ -n "${{ inputs.production_date }}" ]; then
+            ARGS+=("--date" "${{ inputs.production_date }}")
+          fi
+          if [ "${{ inputs.retry_publish }}" = "true" ]; then
+            ARGS+=("--retry-publish")
+          fi
+          python -m src.main "${ARGS[@]}"
+
+      - name: Save updated production history cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/history.json
+          key: story-history-${{ github.run_id }}
+
+      - name: Upload generated MP4, subtitles, metadata, and logs as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-story-video-${{ github.run_number }}
+          path: |
+            output/
+            data/history.json
+            assets/licenses/selected_images_attribution.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Clean up temporary workspace files
+        if: always()
+        run: |
+          rm -rf /tmp/auto_video_* output/cache/
