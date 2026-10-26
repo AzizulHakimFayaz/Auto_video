@@ -6,7 +6,7 @@ A production-oriented, zero-budget Python automation system that generates one o
 
 ## 1. Key Capabilities & Zero-Budget Safeguards
 
-- **AI Story Generation (`src/story_generator.py`)**: Uses OpenRouter's free model endpoint (`nvidia/nemotron-3-ultra-550b-a55b:free` by default) via an OpenAI-compatible client. Enforces a hard zero-budget policy: any model identifier not ending in `:free` is rejected at startup.
+- **AI Story Generation (`src/story_generator.py`)**: Uses OpenRouter's free model endpoint (`meta-llama/llama-3.3-70b-instruct:free` by default) via an OpenAI-compatible client. Enforces a hard zero-budget policy: any model identifier not ending in `:free` is rejected at startup.
 - **5-Stage Scene Image Selection (`src/image_selector.py`)**:
   1. Local library tagged match (`assets/backgrounds/<theme>/`).
   2. Official **Pixabay API** search (when `PIXABAY_API_KEY` is configured).
@@ -128,7 +128,7 @@ Edit `.env` to add your `OPENROUTER_API_KEY` and any optional provider keys.
 2. Set in `.env`:
    ```ini
    OPENROUTER_API_KEY=sk-or-v1-...
-   OPENROUTER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+   OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
    ```
 3. **Free-Tier Quotas & Safeguards**:
    - OpenRouter `:free` models cost `$0.00` per prompt/completion token, but are subject to dynamic rate limits (typically ~20 requests/minute and 50–200 requests/day depending on account tier) and upstream provider capacity.
